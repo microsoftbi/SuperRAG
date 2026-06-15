@@ -11,14 +11,20 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.config import settings
 from app.models.document import Document
+from app.rag.bm25_retriever import BM25Retriever
 from app.services.vector_store import VectorStoreService
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentProcessor:
-    def __init__(self, vector_store: VectorStoreService):
+    def __init__(
+        self,
+        vector_store: VectorStoreService,
+        bm25_retriever: BM25Retriever | None = None,
+    ):
         self.vector_store = vector_store
+        self.bm25_retriever = bm25_retriever
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.chunk_size,
             chunk_overlap=settings.chunk_overlap,
@@ -89,4 +95,8 @@ class DocumentProcessor:
 
         self.vector_store.add_texts(chunk_ids, texts, metadatas)
         logger.info("Document %s processed into %d chunks", document.title, len(chunks))
+
+        if self.bm25_retriever:
+            self.bm25_retriever.rebuild_index()
+
         return len(chunks)
