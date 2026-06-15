@@ -1,6 +1,8 @@
 import datetime
-from sqlalchemy import String, Text, Integer, DateTime, Float, ForeignKey
+
+from sqlalchemy import String, Text, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.database import Base
 
 
@@ -14,6 +16,8 @@ class Chunk(Base):
     page_number: Mapped[int] = mapped_column(Integer, nullable=True)
     chunk_index: Mapped[int] = mapped_column(Integer)
     metadata_json: Mapped[str] = mapped_column(Text, default="{}")
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+    )
 
     document = relationship("Document", back_populates="chunks")

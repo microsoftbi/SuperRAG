@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class SourceReference(BaseModel):
@@ -13,7 +14,7 @@ class SourceReference(BaseModel):
 class ChatRequest(BaseModel):
     session_id: str
     query: str
-    history: list[dict] = []
+    history: list[dict[str, str]] = []
 
 
 class ChatResponse(BaseModel):
