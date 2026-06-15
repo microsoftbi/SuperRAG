@@ -1,7 +1,11 @@
 import chromadb
 from chromadb.config import Settings
+
 from app.config import settings
 from app.services.llm_service import LLMService
+
+
+COLLECTION_NAME = "sprag_docs"
 
 
 class VectorStoreService:
@@ -12,7 +16,7 @@ class VectorStoreService:
         )
         self.llm_service = llm_service
         self.collection = self.client.get_or_create_collection(
-            name="sprag_docs",
+            name=COLLECTION_NAME,
             metadata={"hnsw:space": "cosine"},
         )
 
@@ -26,12 +30,13 @@ class VectorStoreService:
         )
 
     def similarity_search(
-        self, query: str, k: int = 10
+        self, query: str, k: int | None = None
     ) -> list[dict]:
+        top_k = k or settings.retriever_top_k
         query_embedding = self.llm_service.embed([query])[0]
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=k,
+            n_results=top_k,
             include=["documents", "metadatas", "distances"],
         )
         if not results["ids"]:
@@ -43,12 +48,12 @@ class VectorStoreService:
                 "id": results["ids"][0][i],
                 "content": results["documents"][0][i],
                 "metadata": results["metadatas"][0][i],
-                "score": 1 - results["distances"][0][i],  # cosine -> similarity
+                "score": 1 - results["distances"][0][i],
             })
         return items
 
     def delete_by_document(self, document_id: int):
-        self.collection.delete(where={"document_id": str(document_id)})
+        self.collection.delete(where={"document_id": document_id})
 
     def delete_by_ids(self, ids: list[str]):
         self.collection.delete(ids=ids)

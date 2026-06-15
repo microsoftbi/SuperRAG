@@ -1,6 +1,8 @@
+from collections.abc import Generator
+
 from openai import OpenAI
+
 from app.config import settings
-from typing import Generator
 
 
 class LLMService:
@@ -8,6 +10,7 @@ class LLMService:
         self.client = OpenAI(
             api_key=f"{settings.volc_access_key}:{settings.volc_secret_key}",
             base_url=f"https://{settings.volc_endpoint}/api/v3",
+            timeout=60.0,
         )
         self.model = settings.llm_model_name
 
