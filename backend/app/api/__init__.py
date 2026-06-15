@@ -1,1 +1,1 @@
-from app.api import chat, documents, logs, feedback, config
+from app.api import chat, documents, logs, feedback, config, stats, alerts

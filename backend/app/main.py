@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import ensure_dirs
 from app.database import init_db
-from app.api import chat, documents, logs, feedback, config
+from app.api import chat, documents, logs, feedback, config, stats, alerts
 
 
 @asynccontextmanager
@@ -28,6 +28,8 @@ app.include_router(documents.router, prefix="/api/v1")
 app.include_router(logs.router, prefix="/api/v1")
 app.include_router(feedback.router, prefix="/api/v1")
 app.include_router(config.router, prefix="/api/v1")
+app.include_router(stats.router, prefix="/api/v1")
+app.include_router(alerts.router, prefix="/api/v1")
 
 
 @app.get("/health")

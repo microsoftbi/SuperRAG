@@ -17,6 +17,7 @@
       </button>
     </nav>
     <div class="admin-content">
+      <DashboardView v-if="activeTab === 'dashboard'" />
       <DocumentUploader v-if="activeTab === 'docs'" @uploaded="loadDocuments" />
       <div v-if="activeTab === 'docs'" class="doc-list">
         <h2>文档列表</h2>
@@ -56,14 +57,16 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import DashboardView from '../components/admin/DashboardView.vue'
 import DocumentUploader from '../components/admin/DocumentUploader.vue'
 import LogViewer from '../components/admin/LogViewer.vue'
 import SettingsPanel from '../components/admin/SettingsPanel.vue'
 import FeedbackPanel from '../components/admin/FeedbackPanel.vue'
 import { listDocuments, deleteDocument } from '../api/index.js'
 
-const activeTab = ref('docs')
+const activeTab = ref('dashboard')
 const tabs = [
+  { key: 'dashboard', label: '仪表盘' },
   { key: 'docs', label: '文档管理' },
   { key: 'logs', label: '问答日志' },
   { key: 'feedback', label: '用户反馈' },

@@ -61,4 +61,18 @@ export function updateRuntimeConfig(data) {
   return api.put('/config', data)
 }
 
+// Stats
+export function getStatsOverview() {
+  return api.get('/stats/overview')
+}
+
+export function getStatsTrends(days = 7) {
+  return api.get('/stats/trends', { params: { days } })
+}
+
+// Alerts
+export function getAlerts() {
+  return api.get('/alerts')
+}
+
 export default api
