@@ -5,7 +5,8 @@ def test_retriever_returns_list():
 
     llm = LLMService()
     vs = VectorStoreService(llm)
-    retriever = Retriever(vs)
+    retriever = Retriever(vs, llm)
 
-    results = retriever.retrieve("test query", k=3)
+    results, rewritten_query = retriever.retrieve("test query", k=3)
     assert isinstance(results, list)
+    assert isinstance(rewritten_query, str)

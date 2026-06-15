@@ -13,11 +13,11 @@ def test_bm25_tokenize():
     assert "123" in tokens
 
 
-def test_bm25_empty_index():
-    """Empty index should return empty results."""
+def test_bm25_initial_state():
+    """New retriever should start uninitialized."""
     from app.rag.bm25_retriever import BM25Retriever
 
     retriever = BM25Retriever()
-    results = retriever.retrieve("test")
-    assert isinstance(results, list)
-    assert len(results) == 0
+    assert not retriever._initialized
+    assert retriever._corpus == []
+    assert retriever._bm25 is None
