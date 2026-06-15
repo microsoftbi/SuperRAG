@@ -1,0 +1,109 @@
+<template>
+  <div class="chat-window">
+    <div class="messages" ref="messagesRef">
+      <div v-if="messages.length === 0" class="empty-state">
+        您好！我是客服助手，请描述您遇到的问题。
+      </div>
+      <MessageBubble
+        v-for="(msg, i) in messages"
+        :key="i"
+        :role="msg.role"
+        :content="msg.content"
+        :sources="msg.sources"
+      />
+    </div>
+    <div class="input-area">
+      <textarea
+        v-model="input"
+        @keydown.enter.exact="send"
+        placeholder="请输入您的问题..."
+        :disabled="loading"
+        rows="2"
+      />
+      <button @click="send" :disabled="loading || !input.trim()">
+        {{ loading ? '思考中...' : '发送' }}
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, nextTick } from 'vue'
+import MessageBubble from './MessageBubble.vue'
+import { sendChatMessage } from '../../api/index.js'
+
+const input = ref('')
+const loading = ref(false)
+const messages = ref([])
+const messagesRef = ref(null)
+const sessionId = ref('session_' + Date.now())
+
+async function send() {
+  if (!input.value.trim() || loading.value) return
+  const query = input.value
+  messages.value.push({ role: 'user', content: query })
+  input.value = ''
+  loading.value = true
+
+  const history = messages.value.slice(-12, -1).map(m => ({
+    role: m.role,
+    content: m.content,
+  }))
+
+  messages.value.push({ role: 'assistant', content: '', sources: [] })
+
+  try {
+    const response = await sendChatMessage(sessionId.value, query, history)
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = line.slice(6)
+        if (data === '[DONE]') continue
+        try {
+          const parsed = JSON.parse(data)
+          if (parsed.type === 'token') {
+            messages.value[messages.value.length - 1].content += parsed.content
+          } else if (parsed.type === 'sources') {
+            messages.value[messages.value.length - 1].sources = parsed.sources
+          }
+        } catch { /* skip partial lines */ }
+      }
+    }
+  } catch (err) {
+    messages.value[messages.value.length - 1].content = '抱歉，发生了错误，请稍后重试。'
+  } finally {
+    loading.value = false
+    await nextTick()
+    messagesRef.value?.scrollTo({ top: messagesRef.value.scrollHeight, behavior: 'smooth' })
+  }
+}
+</script>
+
+<style scoped>
+.chat-window { flex: 1; display: flex; flex-direction: column; }
+.messages { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.empty-state { text-align: center; color: #999; margin-top: 40px; font-size: 15px; }
+.input-area {
+  display: flex; gap: 8px; padding: 12px 20px;
+  border-top: 1px solid #e0e0e0;
+}
+.input-area textarea {
+  flex: 1; resize: none; padding: 10px; border: 1px solid #d0d0d0;
+  border-radius: 8px; font-size: 14px; outline: none;
+}
+.input-area button {
+  padding: 10px 20px; background: #1976d2; color: #fff;
+  border: none; border-radius: 8px; cursor: pointer; font-size: 14px;
+}
+.input-area button:disabled { background: #ccc; cursor: not-allowed; }
+</style>
