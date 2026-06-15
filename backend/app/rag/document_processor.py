@@ -1,16 +1,19 @@
+import logging
 import os
 import uuid
 from pathlib import Path
 
-import pypdf
 import docx
 import markdown
+import pypdf
 from bs4 import BeautifulSoup
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.config import settings
-from app.models.document import Document, DocumentStatus
+from app.models.document import Document
 from app.services.vector_store import VectorStoreService
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentProcessor:
@@ -21,6 +24,9 @@ class DocumentProcessor:
             chunk_overlap=settings.chunk_overlap,
             separators=["\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", ""],
         )
+
+    def _read_file(self, file_path: str) -> str:
+        return Path(file_path).read_text(encoding="utf-8")
 
     def extract_text(self, file_path: str) -> str:
         ext = Path(file_path).suffix.lower()
@@ -33,7 +39,7 @@ class DocumentProcessor:
         elif ext in (".html", ".htm"):
             return self._extract_html(file_path)
         elif ext == ".txt":
-            return Path(file_path).read_text(encoding="utf-8")
+            return self._read_file(file_path)
         else:
             raise ValueError(f"Unsupported file type: {ext}")
 
@@ -46,12 +52,12 @@ class DocumentProcessor:
         return "\n".join(p.text for p in doc.paragraphs)
 
     def _extract_md(self, file_path: str) -> str:
-        raw = Path(file_path).read_text(encoding="utf-8")
+        raw = self._read_file(file_path)
         html = markdown.markdown(raw)
         return BeautifulSoup(html, "html.parser").get_text()
 
     def _extract_html(self, file_path: str) -> str:
-        raw = Path(file_path).read_text(encoding="utf-8")
+        raw = self._read_file(file_path)
         return BeautifulSoup(raw, "html.parser").get_text()
 
     def process_document(self, document: Document) -> int:
@@ -59,9 +65,13 @@ class DocumentProcessor:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
 
+        logger.info("Processing document %s (id=%d)", document.title, document.id)
         raw_text = self.extract_text(file_path)
-        chunks = self.text_splitter.split_text(raw_text)
+        if not raw_text.strip():
+            logger.warning("Empty text extracted from %s", file_path)
+            return 0
 
+        chunks = self.text_splitter.split_text(raw_text)
         chunk_ids = []
         texts = []
         metadatas = []
@@ -70,7 +80,7 @@ class DocumentProcessor:
             chunk_ids.append(chunk_id)
             texts.append(chunk_text)
             metadatas.append({
-                "document_id": document.id,  # NOTE: int, not str — matches delete_by_document
+                "document_id": document.id,
                 "document_title": document.title,
                 "chunk_index": i,
                 "doc_type": document.doc_type,
@@ -78,4 +88,5 @@ class DocumentProcessor:
             })
 
         self.vector_store.add_texts(chunk_ids, texts, metadatas)
+        logger.info("Document %s processed into %d chunks", document.title, len(chunks))
         return len(chunks)
