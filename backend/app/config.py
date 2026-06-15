@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
 from pathlib import Path
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -12,7 +13,6 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./sprag.db"
     upload_dir: str = "./uploads"
 
-    # RAG 参数
     chunk_size: int = 500
     chunk_overlap: int = 50
     retriever_top_k: int = 10
@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# 确保目录存在
-Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
-Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
+
+def ensure_dirs() -> None:
+    Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
+    Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
