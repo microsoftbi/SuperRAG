@@ -32,7 +32,7 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
 
         sources = [
             {
-                "chunk_id": 0,
+                "chunk_id": ctx["id"],
                 "document_title": ctx.get("metadata", {}).get("document_title", ""),
                 "content": ctx["content"][:200],
                 "score": round(ctx["score"], 4),

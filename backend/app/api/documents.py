@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.document import Document, DocumentStatus
-from app.models.chunk import Chunk
 from app.schemas.document import DocumentResponse, DocumentListResponse
 from app.services.llm_service import LLMService
 from app.services.vector_store import VectorStoreService
@@ -52,11 +51,7 @@ def upload_document(
         document.status = DocumentStatus.PROCESSING.value
         db.commit()
 
-        chunk_count = doc_processor.process_document(document)
-
-        for i in range(chunk_count):
-            db.add(Chunk(document_id=document.id, chunk_index=i, content="", metadata_json="{}"))
-        db.commit()
+        doc_processor.process_document(document)
 
         document.status = DocumentStatus.READY.value
         db.commit()
