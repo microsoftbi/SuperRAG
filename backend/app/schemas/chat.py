@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class SourceReference(BaseModel):
-    chunk_id: int
+    chunk_id: str
     document_title: str
     content: str
     score: float

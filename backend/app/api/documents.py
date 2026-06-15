@@ -1,19 +1,22 @@
 # backend/app/api/documents.py
 import shutil
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models.document import Document, DocumentStatus
 from app.schemas.document import DocumentResponse, DocumentListResponse
 from app.services.llm_service import LLMService
 from app.services.vector_store import VectorStoreService
 from app.rag.document_processor import DocumentProcessor
-from app.config import settings
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".md", ".html", ".htm", ".txt"}
 
 llm_service = LLMService()
 vector_store = VectorStoreService(llm_service)
@@ -27,14 +30,19 @@ def upload_document(
     category: str = Form("default"),
     db: Session = Depends(get_db),
 ):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+
     ext = Path(file.filename).suffix.lower()
-    if ext not in (".pdf", ".docx", ".md", ".html", ".htm", ".txt"):
+    if ext not in SUPPORTED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     doc_title = title or Path(file.filename).stem
-    save_path = Path(settings.upload_dir) / file.filename
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    save_path = Path(settings.upload_dir) / unique_name
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
+    file.file.close()
 
     document = Document(
         title=doc_title,
