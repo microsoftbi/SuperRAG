@@ -16,17 +16,20 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 llm_service = LLMService()
 vector_store = VectorStoreService(llm_service)
-retriever = Retriever(vector_store)
+retriever = Retriever(vector_store, llm_service)
 generator = Generator(llm_service)
 
 
 @router.post("")
 def chat(request: ChatRequest, db: Session = Depends(get_db)):
-    contexts = retriever.retrieve(request.query)
+    contexts, rewritten_query = retriever.retrieve(request.query, history=request.history)
 
     def stream_response():
         full_answer = ""
-        for chunk in generator.generate_stream(request.query, contexts, request.history):
+        for chunk in generator.generate_stream(
+            rewritten_query, contexts, request.history,
+            original_query=request.query,
+        ):
             full_answer += chunk
             yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
 
@@ -35,7 +38,7 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
                 "chunk_id": ctx["id"],
                 "document_title": ctx.get("metadata", {}).get("document_title", ""),
                 "content": ctx["content"][:200],
-                "score": round(ctx["score"], 4),
+                "score": round(ctx.get("rerank_score", ctx.get("score", 0)), 4),
             }
             for ctx in contexts[:5]
         ]

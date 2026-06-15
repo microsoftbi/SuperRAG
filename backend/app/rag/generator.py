@@ -42,6 +42,7 @@ class Generator:
         contexts: list[dict],
         history: list[dict],
         temperature: float = 0.7,
+        original_query: str | None = None,
     ) -> StreamGenerator[str, None, None]:
         messages = self.build_messages(query, contexts, history)
         yield from self.llm_service.chat_stream(messages, temperature=temperature)

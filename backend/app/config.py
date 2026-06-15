@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     retriever_top_k: int = 10
     reranker_top_k: int = 5
 
+    # Phase 2: 检索增强
+    enable_query_rewriting: bool = True
+    enable_hybrid_retrieval: bool = True
+    enable_reranker: bool = True
+    bm25_top_k: int = 10
+    hybrid_fusion_k: int = 60
+
     class Config:
         env_file = ".env"
 

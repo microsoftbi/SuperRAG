@@ -13,6 +13,7 @@ from app.schemas.document import DocumentResponse, DocumentListResponse
 from app.services.llm_service import LLMService
 from app.services.vector_store import VectorStoreService
 from app.rag.document_processor import DocumentProcessor
+from app.rag.bm25_retriever import BM25Retriever
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -20,7 +21,8 @@ SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".md", ".html", ".htm", ".txt"}
 
 llm_service = LLMService()
 vector_store = VectorStoreService(llm_service)
-doc_processor = DocumentProcessor(vector_store)
+bm25_retriever = BM25Retriever()
+doc_processor = DocumentProcessor(vector_store, bm25_retriever)
 
 
 @router.post("/upload", response_model=DocumentResponse)
@@ -96,6 +98,7 @@ def delete_document(document_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Document not found")
 
     vector_store.delete_by_document(document_id)
+    bm25_retriever.delete_by_document(document_id)
 
     file_path = Path(document.file_path)
     if file_path.exists():
