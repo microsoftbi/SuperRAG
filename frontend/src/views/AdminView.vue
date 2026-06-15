@@ -1,12 +1,24 @@
 <template>
   <div class="admin-page">
     <header class="admin-header">
-      <h1>知识库管理</h1>
-      <router-link to="/">返回对话</router-link>
+      <h1>管理后台</h1>
+      <div class="nav">
+        <router-link to="/">返回对话</router-link>
+      </div>
     </header>
+    <nav class="tabs">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        :class="['tab', { active: activeTab === tab.key }]"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.label }}
+      </button>
+    </nav>
     <div class="admin-content">
-      <DocumentUploader @uploaded="loadDocuments" />
-      <div class="doc-list">
+      <DocumentUploader v-if="activeTab === 'docs'" @uploaded="loadDocuments" />
+      <div v-if="activeTab === 'docs'" class="doc-list">
         <h2>文档列表</h2>
         <table>
           <thead>
@@ -35,6 +47,9 @@
           </tbody>
         </table>
       </div>
+      <LogViewer v-if="activeTab === 'logs'" />
+      <SettingsPanel v-if="activeTab === 'settings'" />
+      <FeedbackPanel v-if="activeTab === 'feedback'" />
     </div>
   </div>
 </template>
@@ -42,7 +57,18 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import DocumentUploader from '../components/admin/DocumentUploader.vue'
+import LogViewer from '../components/admin/LogViewer.vue'
+import SettingsPanel from '../components/admin/SettingsPanel.vue'
+import FeedbackPanel from '../components/admin/FeedbackPanel.vue'
 import { listDocuments, deleteDocument } from '../api/index.js'
+
+const activeTab = ref('docs')
+const tabs = [
+  { key: 'docs', label: '文档管理' },
+  { key: 'logs', label: '问答日志' },
+  { key: 'feedback', label: '用户反馈' },
+  { key: 'settings', label: '参数配置' },
+]
 
 const documents = ref([])
 const statusMap = { pending: '待处理', processing: '处理中', ready: '就绪', failed: '失败' }
@@ -62,10 +88,16 @@ onMounted(loadDocuments)
 </script>
 
 <style scoped>
-.admin-page { max-width: 1000px; margin: 0 auto; padding: 20px; }
-.admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.admin-page { max-width: 1100px; margin: 0 auto; padding: 20px; }
+.admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .admin-header h1 { font-size: 22px; }
 .admin-header a { color: #1976d2; text-decoration: none; font-size: 14px; }
+.tabs { display: flex; gap: 4px; border-bottom: 2px solid #e0e0e0; margin-bottom: 20px; }
+.tab {
+  padding: 8px 20px; border: none; background: none; cursor: pointer;
+  font-size: 14px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px;
+}
+.tab.active { color: #1976d2; border-bottom-color: #1976d2; font-weight: 600; }
 .admin-content { display: flex; flex-direction: column; gap: 24px; }
 .doc-list h2 { font-size: 16px; margin-bottom: 8px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }

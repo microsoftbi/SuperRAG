@@ -4,6 +4,18 @@
     <div class="bubble">
       <div class="content" v-html="renderedContent" />
       <SourceReference v-if="sources && sources.length > 0" :sources="sources" />
+      <div v-if="role === 'assistant' && content && !loading" class="feedback-actions">
+        <button
+          :class="['fb-btn', { active: feedback === 'like' }]"
+          @click="$emit('feedback', 'like')"
+          title="有帮助"
+        >👍</button>
+        <button
+          :class="['fb-btn', { active: feedback === 'dislike' }]"
+          @click="$emit('feedback', 'dislike')"
+          title="没帮助"
+        >👎</button>
+      </div>
     </div>
   </div>
 </template>
@@ -16,7 +28,11 @@ const props = defineProps({
   role: { type: String, required: true },
   content: { type: String, default: '' },
   sources: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
+  feedback: { type: String, default: '' },
 })
+
+defineEmits(['feedback'])
 
 const renderedContent = computed(() => {
   return props.content
@@ -46,4 +62,8 @@ const renderedContent = computed(() => {
 }
 .content { line-height: 1.6; }
 .source-ref { font-size: 11px; color: #1976d2; cursor: pointer; }
+.feedback-actions { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e0e0; display: flex; gap: 4px; }
+.fb-btn { background: none; border: 1px solid #ddd; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 14px; }
+.fb-btn:hover { background: #f0f0f0; }
+.fb-btn.active { background: #e3f2fd; border-color: #1976d2; }
 </style>

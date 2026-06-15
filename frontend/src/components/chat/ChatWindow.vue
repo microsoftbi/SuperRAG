@@ -10,6 +10,9 @@
         :role="msg.role"
         :content="msg.content"
         :sources="msg.sources"
+        :loading="msg.role === 'assistant' && i === messages.length - 1 && loading"
+        :feedback="msg.feedback || ''"
+        @feedback="(rating) => handleFeedback(i, rating)"
       />
     </div>
     <div class="input-area">
@@ -30,7 +33,7 @@
 <script setup>
 import { ref, nextTick } from 'vue'
 import MessageBubble from './MessageBubble.vue'
-import { sendChatMessage } from '../../api/index.js'
+import { sendChatMessage, submitFeedback } from '../../api/index.js'
 
 const input = ref('')
 const loading = ref(false)
@@ -85,6 +88,20 @@ async function send() {
     loading.value = false
     await nextTick()
     messagesRef.value?.scrollTo({ top: messagesRef.value.scrollHeight, behavior: 'smooth' })
+  }
+}
+
+async function handleFeedback(index, rating) {
+  const msg = messages.value[index]
+  if (!msg || msg.feedback) return
+  msg.feedback = rating
+  try {
+    await submitFeedback({
+      session_id: sessionId.value,
+      rating,
+    })
+  } catch {
+    // silently fail
   }
 }
 </script>

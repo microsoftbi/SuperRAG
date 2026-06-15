@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import ensure_dirs
 from app.database import init_db
-from app.api import chat, documents
+from app.api import chat, documents, logs, feedback, config
 
 
 @asynccontextmanager
@@ -25,6 +25,9 @@ app.add_middleware(
 
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
+app.include_router(logs.router, prefix="/api/v1")
+app.include_router(feedback.router, prefix="/api/v1")
+app.include_router(config.router, prefix="/api/v1")
 
 
 @app.get("/health")
