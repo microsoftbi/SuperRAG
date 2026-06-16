@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.knowledge_base import KnowledgeBase, document_knowledge_base
+from app.models.knowledge_base import KnowledgeBase, document_knowledge_base, user_knowledge_base
 from app.models.user import User
 from app.schemas.knowledge_base import KnowledgeBaseCreate, KnowledgeBaseResponse
 from app.services.auth_service import get_current_user, require_admin
@@ -117,6 +117,45 @@ def set_kb_documents(
         db.execute(
             document_knowledge_base.insert().values(
                 document_id=doc_id, knowledge_base_id=kb_id
+            )
+        )
+    db.commit()
+    return {"message": "ok"}
+
+
+@router.get("/{kb_id}/users", response_model=list[int])
+def get_kb_users(
+    kb_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Get user IDs who can access this knowledge base."""
+    rows = db.execute(
+        user_knowledge_base.select().where(
+            user_knowledge_base.c.knowledge_base_id == kb_id
+        )
+    ).all()
+    return [row.user_id for row in rows]
+
+
+@router.put("/{kb_id}/users")
+def set_kb_users(
+    kb_id: int,
+    data: dict,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Set which users can access this knowledge base."""
+    user_ids = data.get("user_ids", [])
+    db.execute(
+        user_knowledge_base.delete().where(
+            user_knowledge_base.c.knowledge_base_id == kb_id
+        )
+    )
+    for uid in user_ids:
+        db.execute(
+            user_knowledge_base.insert().values(
+                user_id=uid, knowledge_base_id=kb_id
             )
         )
     db.commit()

@@ -30,6 +30,7 @@
           <td>
             <button @click="edit(kb)" class="btn-edit">编辑</button>
             <button @click="openDocManager(kb)" class="btn-manage">管理文档</button>
+            <button @click="openUserManager(kb)" class="btn-perm">权限分配</button>
             <button @click="remove(kb.id)" class="btn-danger">删除</button>
           </td>
         </tr>
@@ -70,6 +71,41 @@
         </div>
       </div>
     </div>
+
+    <!-- User Permission Modal -->
+    <div v-if="showUserPerm" class="modal-overlay" @click.self="closeUserPerm">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>权限分配 — {{ permKb?.name }}</h3>
+          <button @click="closeUserPerm" class="close-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="doc-checkbox-list">
+            <label v-for="u in allUsers" :key="u.id" class="doc-row">
+              <input
+                type="checkbox"
+                :value="u.id"
+                v-model="selectedUserIds"
+                :disabled="u.role === 'admin'"
+              />
+              <span class="doc-title">{{ u.username }}</span>
+              <span class="doc-type">{{ u.email }}</span>
+              <span :class="['role-tag', u.role]">
+                {{ u.role === 'admin' ? '管理员' : '用户' }}
+              </span>
+            </label>
+            <div v-if="allUsers.length === 0" class="empty-hint">暂无用户</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="saveUserPerm" :disabled="savingPerm" class="btn-primary">
+            {{ savingPerm ? '保存中...' : '保存权限' }}
+          </button>
+          <button @click="closeUserPerm" class="btn-cancel">取消</button>
+          <span v-if="permMsg" :class="['msg', permMsgType]">{{ permMsg }}</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -96,6 +132,15 @@ const savingDocs = ref(false)
 const docMsg = ref('')
 const docMsgType = ref('')
 const statusMap = { pending: '待处理', processing: '处理中', ready: '就绪', failed: '失败' }
+
+// User permission
+const showUserPerm = ref(false)
+const permKb = ref(null)
+const allUsers = ref([])
+const selectedUserIds = ref([])
+const savingPerm = ref(false)
+const permMsg = ref('')
+const permMsgType = ref('')
 
 async function load() {
   const res = await listKnowledgeBases()
@@ -184,6 +229,47 @@ async function saveDocManager() {
   }
 }
 
+// User permission
+async function openUserManager(kb) {
+  permKb.value = kb
+  permMsg.value = ''
+  selectedUserIds.value = []
+
+  const [userRes, kbUserRes] = await Promise.all([
+    api.get('/users'),
+    api.get(`/knowledge-bases/${kb.id}/users`),
+  ])
+  allUsers.value = userRes.data
+  selectedUserIds.value = kbUserRes.data
+
+  showUserPerm.value = true
+}
+
+function closeUserPerm() {
+  showUserPerm.value = false
+  permKb.value = null
+  allUsers.value = []
+  selectedUserIds.value = []
+  permMsg.value = ''
+}
+
+async function saveUserPerm() {
+  savingPerm.value = true
+  permMsg.value = ''
+  try {
+    await api.put(`/knowledge-bases/${permKb.value.id}/users`, {
+      user_ids: selectedUserIds.value,
+    })
+    permMsg.value = '保存成功'
+    permMsgType.value = 'success'
+  } catch (err) {
+    permMsg.value = err.response?.data?.detail || '保存失败'
+    permMsgType.value = 'error'
+  } finally {
+    savingPerm.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -201,7 +287,11 @@ th { background: #f5f5f5; font-weight: 600; }
 .btn-cancel { padding: 8px 16px; background: #fff; border: 1px solid #d0d0d0; border-radius: 4px; cursor: pointer; font-size: 13px; }
 .btn-edit { padding: 4px 10px; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; font-size: 12px; margin-right: 4px; }
 .btn-manage { padding: 4px 10px; background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; border-radius: 3px; cursor: pointer; font-size: 12px; margin-right: 4px; }
+.btn-perm { padding: 4px 10px; background: #f3e5f5; color: #7b1fa2; border: 1px solid #e1bee7; border-radius: 3px; cursor: pointer; font-size: 12px; margin-right: 4px; }
 .btn-danger { padding: 4px 10px; background: #ef5350; color: #fff; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; }
+.role-tag { padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+.role-tag.admin { background: #e3f2fd; color: #1565c0; }
+.role-tag.user { background: #f5f5f5; color: #666; }
 .msg { font-size: 13px; }
 .msg.success { color: #2e7d32; }
 .msg.error { color: #c62828; }
