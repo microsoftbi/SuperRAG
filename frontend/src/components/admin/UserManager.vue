@@ -1,10 +1,14 @@
 <template>
   <div class="user-manager">
-    <h2>用户管理</h2>
+    <div class="header">
+      <h2>用户管理</h2>
+      <button @click="showCreate = true" class="btn-primary">+ 新建用户</button>
+    </div>
+
     <table v-if="users.length">
       <thead>
         <tr>
-          <th>用户名</th><th>邮箱</th><th>角色</th><th>知识库权限</th><th>操作</th>
+          <th>用户名</th><th>邮箱</th><th>角色</th><th>知识库权限</th>
         </tr>
       </thead>
       <tbody>
@@ -21,24 +25,64 @@
               <button @click="saveKbPerms(u.id)" :disabled="savingPerms" class="btn-primary">保存</button>
               <button @click="editingUserId = null" class="btn-cancel">取消</button>
             </div>
-            <button v-else-if="u.role !== 'admin'" @click="startEdit(u)" class="btn-edit">分配知识库</button>
-            <span v-else class="all-access">全部</span>
-          </td>
-          <td>
-            <span v-if="u.role === 'user'" class="kb-badges">
+            <div v-else class="kb-badges">
               <span v-for="kb in getUserKbNames(u.id)" :key="kb" class="badge">{{ kb }}</span>
-            </span>
+              <button v-if="u.role !== 'admin'" @click="startEdit(u)" class="btn-edit-sm">分配</button>
+              <span v-if="u.role === 'admin'" class="all-access">全部</span>
+            </div>
           </td>
         </tr>
       </tbody>
     </table>
     <div v-else class="empty">暂无用户</div>
+
+    <!-- Create User Modal -->
+    <div v-if="showCreate" class="modal-overlay" @click.self="showCreate = false">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>新建用户</h3>
+          <button @click="showCreate = false" class="close-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="create-form">
+            <div class="field">
+              <label>用户名</label>
+              <input v-model="formUsername" placeholder="用户名" />
+            </div>
+            <div class="field">
+              <label>邮箱</label>
+              <input v-model="formEmail" placeholder="邮箱" />
+            </div>
+            <div class="field">
+              <label>密码</label>
+              <input v-model="formPassword" type="password" placeholder="密码（至少6位）" />
+            </div>
+            <div class="field">
+              <label>角色</label>
+              <select v-model="formRole">
+                <option value="user">普通用户</option>
+                <option value="admin">管理员</option>
+              </select>
+            </div>
+          </div>
+          <p v-if="createError" class="error">{{ createError }}</p>
+          <p v-if="createSuccess" class="success">{{ createSuccess }}</p>
+        </div>
+        <div class="modal-footer">
+          <button @click="createUser" :disabled="creating" class="btn-primary">
+            {{ creating ? '创建中...' : '创建' }}
+          </button>
+          <button @click="showCreate = false" class="btn-cancel">取消</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { listUsers, listKnowledgeBases, getUserKnowledgeBases, setUserKnowledgeBases } from '../../api/index.js'
+import api from '../../api/index.js'
 
 const users = ref([])
 const allKbs = ref([])
@@ -47,14 +91,26 @@ const editingUserId = ref(null)
 const editingKbIds = ref([])
 const savingPerms = ref(false)
 
+// Create user
+const showCreate = ref(false)
+const formUsername = ref('')
+const formEmail = ref('')
+const formPassword = ref('')
+const formRole = ref('user')
+const creating = ref(false)
+const createError = ref('')
+const createSuccess = ref('')
+
 async function load() {
   const [userRes, kbRes] = await Promise.all([listUsers(), listKnowledgeBases()])
   users.value = userRes.data
   allKbs.value = kbRes.data
   for (const u of users.value) {
     if (u.role === 'user') {
-      const res = await getUserKnowledgeBases(u.id)
-      userKbMap.value[u.id] = res.data
+      try {
+        const res = await getUserKnowledgeBases(u.id)
+        userKbMap.value[u.id] = res.data
+      } catch { /* ignore */ }
     }
   }
 }
@@ -82,12 +138,48 @@ async function saveKbPerms(userId) {
   }
 }
 
+async function createUser() {
+  if (!formUsername.value || !formEmail.value || !formPassword.value) {
+    createError.value = '请填写所有字段'
+    return
+  }
+  creating.value = true
+  createError.value = ''
+  createSuccess.value = ''
+
+  try {
+    const res = await api.post('/auth/register', {
+      username: formUsername.value,
+      email: formEmail.value,
+      password: formPassword.value,
+    })
+
+    // If created as user but should be admin, update role
+    if (formRole.value === 'admin') {
+      await api.put(`/users/${res.data.id}/role`, { role: 'admin' })
+    }
+
+    createSuccess.value = `用户 ${formUsername.value} 创建成功`
+    formUsername.value = ''
+    formEmail.value = ''
+    formPassword.value = ''
+    formRole.value = 'user'
+    setTimeout(() => { showCreate.value = false }, 1000)
+    await load()
+  } catch (err) {
+    createError.value = err.response?.data?.detail || '创建失败'
+  } finally {
+    creating.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
 <style scoped>
 .user-manager { }
-.user-manager h2 { font-size: 16px; margin-bottom: 12px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.header h2 { font-size: 16px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e0e0e0; }
 th { background: #f5f5f5; font-weight: 600; }
@@ -95,14 +187,42 @@ th { background: #f5f5f5; font-weight: 600; }
 .role { padding: 2px 8px; border-radius: 3px; font-size: 12px; }
 .role.admin { background: #e3f2fd; color: #1565c0; }
 .role.user { background: #f5f5f5; color: #666; }
-.kb-select { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.kb-select { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .kb-option { font-size: 13px; display: flex; align-items: center; gap: 3px; }
 .kb-option input { margin: 0; }
 .all-access { font-size: 12px; color: #888; }
-.btn-edit { padding: 4px 10px; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; font-size: 12px; }
-.btn-primary { padding: 4px 10px; background: #1976d2; color: #fff; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; }
-.btn-primary:disabled { background: #ccc; }
-.btn-cancel { padding: 4px 10px; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; font-size: 12px; }
-.kb-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.kb-badges { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .badge { padding: 2px 6px; background: #e8f5e9; color: #2e7d32; border-radius: 3px; font-size: 11px; }
+.btn-edit-sm { padding: 2px 8px; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; font-size: 11px; }
+.btn-primary { padding: 8px 16px; background: #1976d2; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.btn-primary:disabled { background: #ccc; }
+.btn-cancel { padding: 8px 16px; background: #fff; border: 1px solid #d0d0d0; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.error { color: #c62828; font-size: 13px; margin-top: 8px; }
+.success { color: #2e7d32; font-size: 13px; margin-top: 8px; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.modal {
+  background: #fff; border-radius: 10px; width: 420px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid #e0e0e0;
+}
+.modal-header h3 { font-size: 16px; margin: 0; }
+.close-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: #888; }
+.modal-body { padding: 16px 20px; }
+.modal-footer {
+  padding: 12px 20px; border-top: 1px solid #e0e0e0; display: flex; gap: 8px;
+}
+.create-form { display: flex; flex-direction: column; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 13px; color: #555; font-weight: 500; }
+.field input, .field select {
+  padding: 8px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 14px;
+}
 </style>
