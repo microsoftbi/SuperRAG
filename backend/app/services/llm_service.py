@@ -8,8 +8,8 @@ from app.config import settings
 class LLMService:
     def __init__(self):
         self.client = OpenAI(
-            api_key=f"{settings.volc_access_key}:{settings.volc_secret_key}",
-            base_url=f"https://{settings.volc_endpoint}/api/v3",
+            api_key=settings.volc_api_key,
+            base_url=settings.volc_endpoint,
             timeout=60.0,
         )
         self.model = settings.llm_model_name

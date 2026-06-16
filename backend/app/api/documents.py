@@ -14,6 +14,8 @@ from app.services.llm_service import LLMService
 from app.services.vector_store import VectorStoreService
 from app.rag.document_processor import DocumentProcessor
 from app.rag.bm25_retriever import BM25Retriever
+from app.models.user import User
+from app.services.auth_service import require_admin
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -30,6 +32,7 @@ def upload_document(
     file: UploadFile = File(...),
     title: str = Form(""),
     category: str = Form("default"),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     if not file.filename:
@@ -79,6 +82,7 @@ def list_documents(
     status: str | None = None,
     skip: int = 0,
     limit: int = 20,
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     query = db.query(Document)
@@ -92,7 +96,7 @@ def list_documents(
 
 
 @router.delete("/{document_id}")
-def delete_document(document_id: int, db: Session = Depends(get_db)):
+def delete_document(document_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")

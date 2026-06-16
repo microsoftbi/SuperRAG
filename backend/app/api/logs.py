@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.conversation_log import ConversationLog
+from app.models.user import User
 from app.schemas.conversation_log import ConversationLogResponse, ConversationLogListResponse
+from app.services.auth_service import require_admin
 
 router = APIRouter(prefix="/logs", tags=["logs"])
 
@@ -16,6 +18,7 @@ def list_logs(
     session_id: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=200),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     query = db.query(ConversationLog)
@@ -27,7 +30,7 @@ def list_logs(
 
 
 @router.get("/{log_id}", response_model=ConversationLogResponse)
-def get_log(log_id: int, db: Session = Depends(get_db)):
+def get_log(log_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     log = db.query(ConversationLog).filter(ConversationLog.id == log_id).first()
     if not log:
         from fastapi import HTTPException

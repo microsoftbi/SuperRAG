@@ -5,6 +5,41 @@ const api = axios.create({
   timeout: 60000,
 })
 
+// Auth interceptor — 自动附带 token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// Auth interceptor — 401 时跳转登录
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+    }
+    return Promise.reject(err)
+  },
+)
+
+// Auth
+export function login(data) {
+  return api.post('/auth/login', data)
+}
+
+export function register(data) {
+  return api.post('/auth/register', data)
+}
+
+export function getMe() {
+  return api.get('/auth/me')
+}
+
 // Documents
 export function uploadDocument(file, title, category) {
   const form = new FormData()
@@ -24,9 +59,13 @@ export function deleteDocument(id) {
 
 // Chat
 export function sendChatMessage(sessionId, query, history) {
-  return api.post('/chat', { session_id: sessionId, query, history }, {
-    responseType: 'stream',
-    adapter: 'fetch',
+  return fetch('/api/v1/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    },
+    body: JSON.stringify({ session_id: sessionId, query, history }),
   })
 }
 

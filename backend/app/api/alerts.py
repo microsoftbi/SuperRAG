@@ -10,12 +10,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.conversation_log import ConversationLog
 from app.models.feedback import Feedback
+from app.models.user import User
+from app.services.auth_service import require_admin
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
 
 @router.get("")
-def get_alerts(db: Session = Depends(get_db)):
+def get_alerts(user: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Check for anomalies and return active alerts."""
     alerts = []
     now = datetime.datetime.now(datetime.timezone.utc)

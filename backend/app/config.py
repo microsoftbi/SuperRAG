@@ -4,14 +4,17 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    volc_access_key: str = ""
-    volc_secret_key: str = ""
+    volc_api_key: str = ""
     volc_endpoint: str = "ark.cn-beijing.volces.com"
     llm_model_name: str = ""
     embedding_model_name: str = ""
     chroma_persist_dir: str = "./chroma_db"
     database_url: str = "sqlite:///./sprag.db"
     upload_dir: str = "./uploads"
+
+    jwt_secret_key: str = "sprag-default-secret-change-in-production"
+    jwt_auto_create_admin: bool = True
+    default_admin_password: str = "admin123"
 
     chunk_size: int = 500
     chunk_overlap: int = 50

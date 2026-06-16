@@ -13,6 +13,8 @@ from app.services.llm_service import LLMService
 from app.services.vector_store import VectorStoreService
 from app.rag.retriever import Retriever
 from app.rag.generator import Generator
+from app.models.user import User
+from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -23,7 +25,7 @@ generator = Generator(llm_service)
 
 
 @router.post("")
-def chat(request: ChatRequest, db: Session = Depends(get_db)):
+def chat(request: ChatRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     start_time = time.time()
     contexts, rewritten_query = retriever.retrieve(request.query, history=request.history)
 

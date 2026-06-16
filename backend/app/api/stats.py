@@ -11,12 +11,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.conversation_log import ConversationLog
 from app.models.feedback import Feedback
+from app.models.user import User
+from app.services.auth_service import require_admin
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
 
 @router.get("/overview")
-def get_overview(db: Session = Depends(get_db)):
+def get_overview(user: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Get overall system statistics."""
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -72,6 +74,7 @@ def get_overview(db: Session = Depends(get_db)):
 @router.get("/trends")
 def get_trends(
     days: int = Query(7, ge=1, le=90),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Get daily trends for the last N days."""

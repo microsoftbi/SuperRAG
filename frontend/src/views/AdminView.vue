@@ -4,6 +4,7 @@
       <h1>管理后台</h1>
       <div class="nav">
         <router-link to="/">返回对话</router-link>
+        <button @click="logout" class="logout-btn">退出</button>
       </div>
     </header>
     <nav class="tabs">
@@ -63,6 +64,15 @@ import LogViewer from '../components/admin/LogViewer.vue'
 import SettingsPanel from '../components/admin/SettingsPanel.vue'
 import FeedbackPanel from '../components/admin/FeedbackPanel.vue'
 import { listDocuments, deleteDocument } from '../api/index.js'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+function logout() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  router.push('/login')
+}
 
 const activeTab = ref('dashboard')
 const tabs = [
@@ -95,6 +105,12 @@ onMounted(loadDocuments)
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .admin-header h1 { font-size: 22px; }
 .admin-header a { color: #1976d2; text-decoration: none; font-size: 14px; }
+.nav { display: flex; align-items: center; gap: 12px; }
+.logout-btn {
+  padding: 4px 12px; border: 1px solid #d0d0d0; border-radius: 4px;
+  background: #fff; cursor: pointer; font-size: 12px; color: #666;
+}
+.logout-btn:hover { background: #f5f5f5; }
 .tabs { display: flex; gap: 4px; border-bottom: 2px solid #e0e0e0; margin-bottom: 20px; }
 .tab {
   padding: 8px 20px; border: none; background: none; cursor: pointer;
