@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.conversation_log import ConversationLog
+from app.models.knowledge_base import document_knowledge_base, user_knowledge_base
 from app.schemas.chat import ChatRequest
 from app.services.llm_service import LLMService
 from app.services.vector_store import VectorStoreService
@@ -24,10 +25,32 @@ retriever = Retriever(vector_store, llm_service)
 generator = Generator(llm_service)
 
 
+def _get_user_doc_ids(user: User, db: Session) -> list[int] | None:
+    """Get document IDs the user has access to based on KB permissions.
+    Returns None for admin (access to all)."""
+    if user.role == "admin":
+        return None
+    rows = db.execute(
+        user_knowledge_base.select().where(user_knowledge_base.c.user_id == user.id)
+    ).all()
+    if not rows:
+        return []
+    kb_ids = [row.knowledge_base_id for row in rows]
+    doc_rows = db.execute(
+        document_knowledge_base.select().where(
+            document_knowledge_base.c.knowledge_base_id.in_(kb_ids)
+        )
+    ).all()
+    return list(set(row.document_id for row in doc_rows))
+
+
 @router.post("")
 def chat(request: ChatRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     start_time = time.time()
-    contexts, rewritten_query = retriever.retrieve(request.query, history=request.history)
+    doc_ids = _get_user_doc_ids(user, db)
+    contexts, rewritten_query = retriever.retrieve(
+        request.query, history=request.history, doc_ids=doc_ids,
+    )
 
     log_entry = ConversationLog(
         session_id=request.session_id,

@@ -71,12 +71,14 @@ class BM25Retriever:
     def _tokenize_corpus(self, corpus: list[str]) -> list[list[str]]:
         return [self._tokenize(doc) for doc in corpus]
 
-    def retrieve(self, query: str, k: int | None = None) -> list[dict]:
+    def retrieve(self, query: str, k: int | None = None,
+                 doc_ids: list[int] | None = None) -> list[dict]:
         """Search with BM25 and return results.
 
         Args:
             query: Search query
             k: Number of results to return
+            doc_ids: Filter by document IDs (for KB access control)
 
         Returns:
             List of dicts with id, content, metadata, score keys
@@ -96,6 +98,11 @@ class BM25Retriever:
             for i in range(len(scores))
             if scores[i] > 0
         ]
+        if doc_ids is not None:
+            scored = [
+                (i, s) for (i, s) in scored
+                if self._metadatas[i].get("document_id") in doc_ids
+            ]
         scored.sort(key=lambda x: x[1], reverse=True)
         scored = scored[:top_k]
 

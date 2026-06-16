@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class DocumentCreate(BaseModel):
     title: str
     category: str = "default"
+    knowledge_base_ids: list[int] | None = None
 
 
 class DocumentResponse(BaseModel):
@@ -14,6 +15,7 @@ class DocumentResponse(BaseModel):
     doc_type: str
     category: str
     status: str
+    knowledge_base_ids: list[int] = []
     created_at: datetime.datetime
 
     class Config:

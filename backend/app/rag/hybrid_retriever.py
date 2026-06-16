@@ -18,12 +18,14 @@ class HybridRetriever:
         self.vector_store = vector_store
         self.bm25_retriever = bm25_retriever
 
-    def retrieve(self, query: str, k: int | None = None) -> list[dict]:
+    def retrieve(self, query: str, k: int | None = None,
+                 doc_ids: list[int] | None = None) -> list[dict]:
         """Perform hybrid retrieval with RRF fusion.
 
         Args:
             query: Search query
             k: Number of final results to return
+            doc_ids: Filter by document IDs (for KB access control)
 
         Returns:
             List of dicts with id, content, metadata, score keys, sorted by fused score
@@ -32,8 +34,9 @@ class HybridRetriever:
         vector_k = settings.retriever_top_k
         bm25_k = settings.bm25_top_k
 
-        vector_results = self.vector_store.similarity_search(query, k=vector_k)
-        bm25_results = self.bm25_retriever.retrieve(query, k=bm25_k)
+        where_filter = {"document_id": {"$in": doc_ids}} if doc_ids else None
+        vector_results = self.vector_store.similarity_search(query, k=vector_k, where_filter=where_filter)
+        bm25_results = self.bm25_retriever.retrieve(query, k=bm25_k, doc_ids=doc_ids)
 
         fusion_scores: dict[str, float] = {}
         result_map: dict[str, dict] = {}

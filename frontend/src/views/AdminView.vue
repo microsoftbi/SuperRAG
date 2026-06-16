@@ -25,14 +25,21 @@
         <table>
           <thead>
             <tr>
-              <th>标题</th><th>类型</th><th>分类</th><th>状态</th><th>上传时间</th><th>操作</th>
+              <th>标题</th><th>类型</th><th>知识库</th><th>状态</th><th>上传时间</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="doc in documents" :key="doc.id">
               <td>{{ doc.title }}</td>
               <td>{{ doc.doc_type }}</td>
-              <td>{{ doc.category }}</td>
+              <td>
+                <div class="kb-badges">
+                  <span v-for="kid in (doc.knowledge_base_ids || [])" :key="kid" class="badge">
+                    {{ getKbName(kid) }}
+                  </span>
+                  <span v-if="!(doc.knowledge_base_ids || []).length" class="no-kb">-</span>
+                </div>
+              </td>
               <td>
                 <span :class="['status', doc.status]">
                   {{ statusMap[doc.status] || doc.status }}
@@ -52,6 +59,8 @@
       <LogViewer v-if="activeTab === 'logs'" />
       <SettingsPanel v-if="activeTab === 'settings'" />
       <FeedbackPanel v-if="activeTab === 'feedback'" />
+      <KnowledgeBaseManager v-if="activeTab === 'knowledge-bases'" />
+      <UserManager v-if="activeTab === 'users'" />
     </div>
   </div>
 </template>
@@ -63,7 +72,9 @@ import DocumentUploader from '../components/admin/DocumentUploader.vue'
 import LogViewer from '../components/admin/LogViewer.vue'
 import SettingsPanel from '../components/admin/SettingsPanel.vue'
 import FeedbackPanel from '../components/admin/FeedbackPanel.vue'
-import { listDocuments, deleteDocument } from '../api/index.js'
+import KnowledgeBaseManager from '../components/admin/KnowledgeBaseManager.vue'
+import UserManager from '../components/admin/UserManager.vue'
+import { listDocuments, deleteDocument, listKnowledgeBases } from '../api/index.js'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -78,17 +89,30 @@ const activeTab = ref('dashboard')
 const tabs = [
   { key: 'dashboard', label: '仪表盘' },
   { key: 'docs', label: '文档管理' },
+  { key: 'knowledge-bases', label: '知识库' },
+  { key: 'users', label: '用户管理' },
   { key: 'logs', label: '问答日志' },
   { key: 'feedback', label: '用户反馈' },
   { key: 'settings', label: '参数配置' },
 ]
 
 const documents = ref([])
+const kbMap = ref({})
 const statusMap = { pending: '待处理', processing: '处理中', ready: '就绪', failed: '失败' }
 
+function getKbName(id) {
+  return kbMap.value[id] || `ID:${id}`
+}
+
 async function loadDocuments() {
-  const res = await listDocuments({ limit: 100 })
-  documents.value = res.data.items
+  const [docRes, kbRes] = await Promise.all([
+    listDocuments({ limit: 100 }),
+    listKnowledgeBases(),
+  ])
+  documents.value = docRes.data.items
+  for (const kb of kbRes.data) {
+    kbMap.value[kb.id] = kb.name
+  }
 }
 
 async function remove(id) {
@@ -129,4 +153,7 @@ th { background: #f5f5f5; font-weight: 600; }
 .status.pending { background: #f5f5f5; color: #666; }
 .delete-btn { padding: 4px 12px; background: #ef5350; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
 .empty { text-align: center; color: #999; padding: 24px; }
+.kb-badges { display: flex; gap: 3px; flex-wrap: wrap; }
+.badge { padding: 1px 6px; background: #e3f2fd; color: #1565c0; border-radius: 3px; font-size: 11px; }
+.no-kb { color: #ccc; }
 </style>

@@ -15,6 +15,7 @@ from app.services.vector_store import VectorStoreService
 from app.rag.document_processor import DocumentProcessor
 from app.rag.bm25_retriever import BM25Retriever
 from app.models.user import User
+from app.models.knowledge_base import document_knowledge_base
 from app.services.auth_service import require_admin
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -32,6 +33,7 @@ def upload_document(
     file: UploadFile = File(...),
     title: str = Form(""),
     category: str = Form("default"),
+    knowledge_base_ids: str = Form("[]"),
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -49,6 +51,9 @@ def upload_document(
         shutil.copyfileobj(file.file, f)
     file.file.close()
 
+    import json
+    kb_ids = json.loads(knowledge_base_ids)
+
     document = Document(
         title=doc_title,
         doc_type=ext.lstrip("."),
@@ -59,6 +64,14 @@ def upload_document(
     db.add(document)
     db.commit()
     db.refresh(document)
+
+    for kb_id in kb_ids:
+        db.execute(
+            document_knowledge_base.insert().values(
+                document_id=document.id, knowledge_base_id=kb_id
+            )
+        )
+    db.commit()
 
     try:
         document.status = DocumentStatus.PROCESSING.value
@@ -80,6 +93,7 @@ def upload_document(
 def list_documents(
     category: str | None = None,
     status: str | None = None,
+    knowledge_base_id: int | None = None,
     skip: int = 0,
     limit: int = 20,
     user: User = Depends(require_admin),
@@ -90,9 +104,25 @@ def list_documents(
         query = query.filter(Document.category == category)
     if status:
         query = query.filter(Document.status == status)
+    if knowledge_base_id:
+        query = query.join(document_knowledge_base).filter(
+            document_knowledge_base.c.knowledge_base_id == knowledge_base_id
+        )
     total = query.count()
     items = query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
-    return DocumentListResponse(total=total, items=items)
+
+    response_items = []
+    for doc in items:
+        kb_ids = [r.knowledge_base_id for r in db.execute(
+            document_knowledge_base.select().where(
+                document_knowledge_base.c.document_id == doc.id
+            )
+        ).all()]
+        resp = DocumentResponse.model_validate(doc)
+        resp.knowledge_base_ids = kb_ids
+        response_items.append(resp)
+
+    return DocumentListResponse(total=total, items=response_items)
 
 
 @router.delete("/{document_id}")
@@ -103,6 +133,12 @@ def delete_document(document_id: int, user: User = Depends(require_admin), db: S
 
     vector_store.delete_by_document(document_id)
     bm25_retriever.delete_by_document(document_id)
+
+    db.execute(
+        document_knowledge_base.delete().where(
+            document_knowledge_base.c.document_id == document_id
+        )
+    )
 
     file_path = Path(document.file_path)
     if file_path.exists():

@@ -41,15 +41,20 @@ export function getMe() {
 }
 
 // Documents
-export function uploadDocument(file, title, category) {
+export function uploadDocument(file, title, category, knowledgeBaseIds = []) {
   const form = new FormData()
   form.append('file', file)
   if (title) form.append('title', title)
   if (category) form.append('category', category)
+  form.append('knowledge_base_ids', JSON.stringify(knowledgeBaseIds))
   return api.post('/documents/upload', form)
 }
 
 export function listDocuments(params) {
+  return api.get('/documents', { params })
+}
+
+export function listDocumentsWithKB(params) {
   return api.get('/documents', { params })
 }
 
@@ -112,6 +117,36 @@ export function getStatsTrends(days = 7) {
 // Alerts
 export function getAlerts() {
   return api.get('/alerts')
+}
+
+// Knowledge Bases
+export function listKnowledgeBases() {
+  return api.get('/knowledge-bases')
+}
+
+export function createKnowledgeBase(data) {
+  return api.post('/knowledge-bases', data)
+}
+
+export function updateKnowledgeBase(id, data) {
+  return api.put(`/knowledge-bases/${id}`, data)
+}
+
+export function deleteKnowledgeBase(id) {
+  return api.delete(`/knowledge-bases/${id}`)
+}
+
+// Users
+export function listUsers() {
+  return api.get('/users')
+}
+
+export function getUserKnowledgeBases(userId) {
+  return api.get(`/users/${userId}/knowledge-bases`)
+}
+
+export function setUserKnowledgeBases(userId, data) {
+  return api.put(`/users/${userId}/knowledge-bases`, data)
 }
 
 export default api

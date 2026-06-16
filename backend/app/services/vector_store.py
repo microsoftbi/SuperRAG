@@ -30,13 +30,15 @@ class VectorStoreService:
         )
 
     def similarity_search(
-        self, query: str, k: int | None = None
+        self, query: str, k: int | None = None,
+        where_filter: dict | None = None,
     ) -> list[dict]:
         top_k = k or settings.retriever_top_k
         query_embedding = self.llm_service.embed([query])[0]
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=top_k,
+            where=where_filter,
             include=["documents", "metadatas", "distances"],
         )
         if not results["ids"]:

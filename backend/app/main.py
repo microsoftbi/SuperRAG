@@ -8,7 +8,7 @@ from app.config import ensure_dirs, settings
 from app.database import init_db, SessionLocal
 from app.models.user import User
 from app.services.auth_service import hash_password
-from app.api import chat, documents, logs, feedback, config, stats, alerts, auth
+from app.api import chat, documents, logs, feedback, config, stats, alerts, auth, knowledge_bases, users
 
 
 @asynccontextmanager
@@ -57,6 +57,8 @@ app.include_router(config.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")
 app.include_router(alerts.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(knowledge_bases.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
 
 
 @app.get("/health")

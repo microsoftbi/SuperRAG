@@ -33,3 +33,4 @@ class Document(Base):
     )
 
     chunks = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
+    knowledge_bases = relationship("KnowledgeBase", secondary="document_knowledge_base", back_populates="documents")

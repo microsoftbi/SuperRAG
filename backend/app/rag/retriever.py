@@ -33,6 +33,7 @@ class Retriever:
         query: str,
         history: list[dict] | None = None,
         k: int | None = None,
+        doc_ids: list[int] | None = None,
     ) -> tuple[list[dict], str]:
         """Execute the full retrieval pipeline.
 
@@ -40,6 +41,7 @@ class Retriever:
             query: User's query
             history: Conversation history for query rewriting
             k: Number of final results
+            doc_ids: Filter by document IDs (for KB access control)
 
         Returns:
             Tuple of (contexts, rewritten_query)
@@ -52,10 +54,11 @@ class Retriever:
         # Step 2: Hybrid retrieval
         if settings.enable_hybrid_retrieval:
             results = self.hybrid_retriever.retrieve(
-                rewritten_query, k=settings.retriever_top_k
+                rewritten_query, k=settings.retriever_top_k, doc_ids=doc_ids,
             )
         else:
-            results = self.vector_store.similarity_search(rewritten_query, k=k)
+            where_filter = {"document_id": {"$in": doc_ids}} if doc_ids else None
+            results = self.vector_store.similarity_search(rewritten_query, k=k, where_filter=where_filter)
 
         # Step 3: Re-ranking
         if settings.enable_reranker and results:
