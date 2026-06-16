@@ -147,3 +147,32 @@ def delete_document(document_id: int, user: User = Depends(require_admin), db: S
     db.delete(document)
     db.commit()
     return {"message": "deleted"}
+
+
+@router.put("/{document_id}/knowledge-bases")
+def update_document_knowledge_bases(
+    document_id: int,
+    data: dict,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Update which knowledge bases a document belongs to."""
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    kb_ids = data.get("knowledge_base_ids", [])
+
+    db.execute(
+        document_knowledge_base.delete().where(
+            document_knowledge_base.c.document_id == document_id
+        )
+    )
+    for kb_id in kb_ids:
+        db.execute(
+            document_knowledge_base.insert().values(
+                document_id=document_id, knowledge_base_id=kb_id
+            )
+        )
+    db.commit()
+    return {"message": "ok"}

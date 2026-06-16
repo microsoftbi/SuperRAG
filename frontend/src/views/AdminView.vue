@@ -33,7 +33,17 @@
               <td>{{ doc.title }}</td>
               <td>{{ doc.doc_type }}</td>
               <td>
-                <div class="kb-badges">
+                <div v-if="editingDocId === doc.id" class="kb-edit-inline">
+                  <label v-for="kb in allKbs" :key="kb.id" class="kb-opt">
+                    <input type="checkbox" :value="kb.id" v-model="editingKbIds" />
+                    {{ kb.name }}
+                  </label>
+                  <div class="kb-edit-actions">
+                    <button @click="saveKbEdit(doc.id)" class="btn-xs-primary">保存</button>
+                    <button @click="editingDocId = null" class="btn-xs">取消</button>
+                  </div>
+                </div>
+                <div v-else class="kb-badges">
                   <span v-for="kid in (doc.knowledge_base_ids || [])" :key="kid" class="badge">
                     {{ getKbName(kid) }}
                   </span>
@@ -47,6 +57,7 @@
               </td>
               <td>{{ new Date(doc.created_at).toLocaleString() }}</td>
               <td>
+                <button @click="startKbEdit(doc)" class="edit-btn">编辑知识库</button>
                 <button @click="remove(doc.id)" class="delete-btn">删除</button>
               </td>
             </tr>
@@ -76,6 +87,7 @@ import KnowledgeBaseManager from '../components/admin/KnowledgeBaseManager.vue'
 import UserManager from '../components/admin/UserManager.vue'
 import { listDocuments, deleteDocument, listKnowledgeBases } from '../api/index.js'
 import { useRouter } from 'vue-router'
+import api from '../api/index.js'
 
 const router = useRouter()
 
@@ -100,8 +112,27 @@ const documents = ref([])
 const kbMap = ref({})
 const statusMap = { pending: '待处理', processing: '处理中', ready: '就绪', failed: '失败' }
 
+const allKbs = ref([])
+const editingDocId = ref(null)
+const editingKbIds = ref([])
+
 function getKbName(id) {
   return kbMap.value[id] || `ID:${id}`
+}
+
+function startKbEdit(doc) {
+  editingDocId.value = doc.id
+  editingKbIds.value = [...(doc.knowledge_base_ids || [])]
+}
+
+async function saveKbEdit(docId) {
+  try {
+    await api.put(`/documents/${docId}/knowledge-bases`, { knowledge_base_ids: editingKbIds.value })
+    editingDocId.value = null
+    await loadDocuments()
+  } catch (err) {
+    alert(err.response?.data?.detail || '保存失败')
+  }
 }
 
 async function loadDocuments() {
@@ -110,6 +141,7 @@ async function loadDocuments() {
     listKnowledgeBases(),
   ])
   documents.value = docRes.data.items
+  allKbs.value = kbRes.data
   for (const kb of kbRes.data) {
     kbMap.value[kb.id] = kb.name
   }
@@ -151,9 +183,16 @@ th { background: #f5f5f5; font-weight: 600; }
 .status.failed { background: #ffebee; color: #c62828; }
 .status.processing { background: #fff3e0; color: #ef6c00; }
 .status.pending { background: #f5f5f5; color: #666; }
-.delete-btn { padding: 4px 12px; background: #ef5350; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.delete-btn { padding: 4px 12px; background: #ef5350; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px; }
+.edit-btn { padding: 4px 10px; background: #fff; border: 1px solid #d0d0d0; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.edit-btn:hover { background: #f5f5f5; }
 .empty { text-align: center; color: #999; padding: 24px; }
 .kb-badges { display: flex; gap: 3px; flex-wrap: wrap; }
 .badge { padding: 1px 6px; background: #e3f2fd; color: #1565c0; border-radius: 3px; font-size: 11px; }
 .no-kb { color: #ccc; }
+.kb-edit-inline { display: flex; flex-direction: column; gap: 4px; }
+.kb-opt { font-size: 12px; display: flex; align-items: center; gap: 3px; }
+.kb-edit-actions { display: flex; gap: 4px; margin-top: 4px; }
+.btn-xs-primary { padding: 3px 8px; background: #1976d2; color: #fff; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; }
+.btn-xs { padding: 3px 8px; background: #fff; border: 1px solid #d0d0d0; border-radius: 3px; cursor: pointer; font-size: 11px; }
 </style>
