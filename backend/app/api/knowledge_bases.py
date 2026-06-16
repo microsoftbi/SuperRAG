@@ -82,6 +82,47 @@ def update_knowledge_base(
     )
 
 
+@router.get("/{kb_id}/documents", response_model=list[int])
+def get_kb_documents(
+    kb_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Get all document IDs in this knowledge base."""
+    rows = db.execute(
+        document_knowledge_base.select().where(
+            document_knowledge_base.c.knowledge_base_id == kb_id
+        )
+    ).all()
+    return [row.document_id for row in rows]
+
+
+@router.put("/{kb_id}/documents")
+def set_kb_documents(
+    kb_id: int,
+    data: dict,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Set which documents belong to this knowledge base."""
+    doc_ids = data.get("document_ids", [])
+    # Remove all current docs from this KB
+    db.execute(
+        document_knowledge_base.delete().where(
+            document_knowledge_base.c.knowledge_base_id == kb_id
+        )
+    )
+    # Add new docs
+    for doc_id in doc_ids:
+        db.execute(
+            document_knowledge_base.insert().values(
+                document_id=doc_id, knowledge_base_id=kb_id
+            )
+        )
+    db.commit()
+    return {"message": "ok"}
+
+
 @router.delete("/{kb_id}")
 def delete_knowledge_base(
     kb_id: int,
