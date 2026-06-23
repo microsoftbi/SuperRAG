@@ -17,19 +17,11 @@
           <td>{{ u.email }}</td>
           <td><span :class="['role', u.role]">{{ u.role === 'admin' ? '管理员' : '普通用户' }}</span></td>
           <td>
-            <div v-if="editingUserId === u.id" class="kb-select">
-              <label v-for="kb in allKbs" :key="kb.id" class="kb-option">
-                <input type="checkbox" :value="kb.id" v-model="editingKbIds" />
-                {{ kb.name }}
-              </label>
-              <button @click="saveKbPerms(u.id)" :disabled="savingPerms" class="btn-primary">保存</button>
-              <button @click="editingUserId = null" class="btn-cancel">取消</button>
-            </div>
-            <div v-else class="kb-badges">
+            <div v-if="u.role !== 'admin'" class="kb-badges">
               <span v-for="kb in getUserKbNames(u.id)" :key="kb" class="badge">{{ kb }}</span>
-              <button v-if="u.role !== 'admin'" @click="startEdit(u)" class="btn-edit-sm">分配</button>
-              <span v-if="u.role === 'admin'" class="all-access">全部</span>
+              <button @click="openKbModal(u)" class="btn-edit-sm">分配</button>
             </div>
+            <span v-if="u.role === 'admin'" class="all-access">全部</span>
           </td>
         </tr>
       </tbody>
@@ -76,6 +68,36 @@
         </div>
       </div>
     </div>
+  <!-- KB Permission Modal -->
+    <div v-if="showKbModal" class="modal-overlay" @click.self="closeKbModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>知识库权限 — {{ editingUser?.username }}</h3>
+          <button @click="closeKbModal" class="close-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="doc-checkbox-list">
+            <label v-for="kb in allKbs" :key="kb.id" class="doc-row">
+              <input
+                type="checkbox"
+                :value="kb.id"
+                v-model="editingKbIds"
+              />
+              <span class="doc-title">{{ kb.name }}</span>
+              <span class="doc-type">{{ kb.description || '-' }}</span>
+            </label>
+            <div v-if="allKbs.length === 0" class="empty-hint">暂无知识库</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="saveKbPerms" :disabled="savingPerms" class="btn-primary">
+            {{ savingPerms ? '保存中...' : '保存权限' }}
+          </button>
+          <button @click="closeKbModal" class="btn-cancel">取消</button>
+          <span v-if="permMsg" :class="['msg', permMsgType]">{{ permMsg }}</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -87,9 +109,14 @@ import api from '../../api/index.js'
 const users = ref([])
 const allKbs = ref([])
 const userKbMap = ref({})
-const editingUserId = ref(null)
 const editingKbIds = ref([])
 const savingPerms = ref(false)
+
+// KB permission modal
+const showKbModal = ref(false)
+const editingUser = ref(null)
+const permMsg = ref('')
+const permMsgType = ref('')
 
 // Create user
 const showCreate = ref(false)
@@ -120,22 +147,34 @@ function getUserKbNames(userId) {
   return allKbs.value.filter(kb => ids.includes(kb.id)).map(kb => kb.name)
 }
 
-async function startEdit(user) {
-  editingUserId.value = user.id
+async function openKbModal(user) {
+  editingUser.value = user
   editingKbIds.value = [...(userKbMap.value[user.id] || [])]
+  permMsg.value = ''
+  showKbModal.value = true
 }
 
-async function saveKbPerms(userId) {
+async function saveKbPerms() {
   savingPerms.value = true
+  permMsg.value = ''
   try {
-    await setUserKnowledgeBases(userId, { knowledge_base_ids: editingKbIds.value })
-    userKbMap.value[userId] = [...editingKbIds.value]
-    editingUserId.value = null
+    await setUserKnowledgeBases(editingUser.value.id, { knowledge_base_ids: editingKbIds.value })
+    userKbMap.value[editingUser.value.id] = [...editingKbIds.value]
+    permMsg.value = '保存成功'
+    permMsgType.value = 'success'
   } catch (err) {
-    alert(err.response?.data?.detail || '保存失败')
+    permMsg.value = err.response?.data?.detail || '保存失败'
+    permMsgType.value = 'error'
   } finally {
     savingPerms.value = false
   }
+}
+
+function closeKbModal() {
+  showKbModal.value = false
+  editingUser.value = null
+  editingKbIds.value = []
+  permMsg.value = ''
 }
 
 async function createUser() {
@@ -187,9 +226,6 @@ th { background: #f5f5f5; font-weight: 600; }
 .role { padding: 2px 8px; border-radius: 3px; font-size: 12px; }
 .role.admin { background: #e3f2fd; color: #1565c0; }
 .role.user { background: #f5f5f5; color: #666; }
-.kb-select { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.kb-option { font-size: 13px; display: flex; align-items: center; gap: 3px; }
-.kb-option input { margin: 0; }
 .all-access { font-size: 12px; color: #888; }
 .kb-badges { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .badge { padding: 2px 6px; background: #e8f5e9; color: #2e7d32; border-radius: 3px; font-size: 11px; }
@@ -206,8 +242,8 @@ th { background: #f5f5f5; font-weight: 600; }
   background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100;
 }
 .modal {
-  background: #fff; border-radius: 10px; width: 420px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  background: #fff; border-radius: 10px; width: 500px; max-height: 80vh;
+  display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
 }
 .modal-header {
   display: flex; justify-content: space-between; align-items: center;
@@ -215,10 +251,24 @@ th { background: #f5f5f5; font-weight: 600; }
 }
 .modal-header h3 { font-size: 16px; margin: 0; }
 .close-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: #888; }
-.modal-body { padding: 16px 20px; }
-.modal-footer {
-  padding: 12px 20px; border-top: 1px solid #e0e0e0; display: flex; gap: 8px;
+.modal-body {
+  padding: 16px 20px; overflow-y: auto; flex: 1; max-height: 50vh;
 }
+.modal-footer {
+  padding: 12px 20px; border-top: 1px solid #e0e0e0; display: flex; gap: 8px; align-items: center;
+}
+.doc-checkbox-list { display: flex; flex-direction: column; gap: 6px; }
+.doc-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border: 1px solid #eee; border-radius: 4px; cursor: pointer; font-size: 14px;
+}
+.doc-row:hover { background: #f9f9f9; }
+.doc-title { flex: 1; }
+.doc-type { font-size: 12px; color: #888; }
+.empty-hint { text-align: center; color: #999; padding: 24px; font-size: 14px; }
+.msg { font-size: 13px; }
+.msg.success { color: #2e7d32; }
+.msg.error { color: #c62828; }
 .create-form { display: flex; flex-direction: column; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 4px; }
 .field label { font-size: 13px; color: #555; font-weight: 500; }

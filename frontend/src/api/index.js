@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: '/api/v1',
-  timeout: 60000,
+  timeout: 120000,
 })
 
 // Auth interceptor — 自动附带 token
@@ -41,11 +41,12 @@ export function getMe() {
 }
 
 // Documents
-export function uploadDocument(file, title, category, knowledgeBaseIds = []) {
+export function uploadDocument(file, title, category, knowledgeBaseIds = [], store = 'vector') {
   const form = new FormData()
   form.append('file', file)
   if (title) form.append('title', title)
   if (category) form.append('category', category)
+  form.append('store', store)
   form.append('knowledge_base_ids', JSON.stringify(knowledgeBaseIds))
   return api.post('/documents/upload', form)
 }
@@ -62,16 +63,29 @@ export function deleteDocument(id) {
   return api.delete(`/documents/${id}`)
 }
 
+export function getDocumentChunks(id) {
+  return api.get(`/documents/${id}/chunks`)
+}
+
 // Chat
-export function sendChatMessage(sessionId, query, history) {
+export function sendChatMessage(sessionId, query, mode = 'rag') {
   return fetch('/api/v1/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${localStorage.getItem('token')}`,
     },
-    body: JSON.stringify({ session_id: sessionId, query, history }),
+    body: JSON.stringify({ session_id: sessionId, query, mode }),
   })
+}
+
+// Chat History
+export function getChatHistory(sessionId, mode = 'rag') {
+  return api.get('/chat/history', { params: { session_id: sessionId, mode } })
+}
+
+export function getChatSessions(mode = 'rag') {
+  return api.get('/chat/sessions', { params: { mode } })
 }
 
 // Logs
@@ -81,6 +95,10 @@ export function listLogs(params) {
 
 export function getLog(id) {
   return api.get(`/logs/${id}`)
+}
+
+export function clearLogs() {
+  return api.delete('/logs')
 }
 
 // Feedback
@@ -147,6 +165,50 @@ export function getUserKnowledgeBases(userId) {
 
 export function setUserKnowledgeBases(userId, data) {
   return api.put(`/users/${userId}/knowledge-bases`, data)
+}
+
+// ── Knowledge Graph（全局图谱）──
+
+export function getGraph() {
+  return api.get('/knowledge-graph/graph')
+}
+
+export function searchEntities(query) {
+  return api.get('/knowledge-graph/entities/search', { params: { q: query } })
+}
+
+export function getEntityDetail(entityId) {
+  return api.get(`/knowledge-graph/entities/${entityId}`)
+}
+
+export function rebuildGraph() {
+  return api.post('/knowledge-graph/extract', null, { timeout: 600000 })
+}
+
+export function createEntity(data) {
+  return api.post('/knowledge-graph/entities', data)
+}
+
+export function createRelationship(data) {
+  return api.post('/knowledge-graph/relationships', data)
+}
+
+export function deleteRelationship(data) {
+  return api.delete('/knowledge-graph/relationships', { data })
+}
+
+// ── NL2SQL ──
+
+export function getNl2SqlConfig() {
+  return api.get('/nl2sql/config')
+}
+
+export function updateNl2SqlConfig(data) {
+  return api.put('/nl2sql/config', data)
+}
+
+export function testNl2SqlConnection(data) {
+  return api.post('/nl2sql/test', data)
 }
 
 export default api

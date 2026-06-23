@@ -1,0 +1,14 @@
+{
+  "retriever_top_k": 10,
+  "reranker_top_k": 5,
+  "bm25_top_k": 10,
+  "hybrid_fusion_k": 60,
+  "enable_query_rewriting": true,
+  "enable_hybrid_retrieval": true,
+  "enable_reranker": true,
+  "chunk_size": 500,
+  "chunk_overlap": 50,
+  "llm_temperature": 0.7,
+  "kg_max_depth": 3,
+  "nl2sql_detail_logging": false
+}

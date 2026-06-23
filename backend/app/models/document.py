@@ -23,6 +23,7 @@ class Document(Base):
     category: Mapped[str] = mapped_column(String(100), default="default")
     file_path: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default=DocumentStatus.PENDING.value)
+    store: Mapped[str] = mapped_column(String(10), default="vector")  # "vector" | "graph" | "both"
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
     )

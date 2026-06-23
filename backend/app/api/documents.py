@@ -1,9 +1,11 @@
 # backend/app/api/documents.py
+import json
 import shutil
 import uuid
+import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -16,16 +18,30 @@ from app.rag.document_processor import DocumentProcessor
 from app.rag.bm25_retriever import BM25Retriever
 from app.models.user import User
 from app.models.knowledge_base import document_knowledge_base
+from app.models.chunk import Chunk
 from app.services.auth_service import require_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".md", ".html", ".htm", ".txt"}
+VALID_STORES = {"vector", "graph", "both"}
 
 llm_service = LLMService()
 vector_store = VectorStoreService(llm_service)
 bm25_retriever = BM25Retriever()
 doc_processor = DocumentProcessor(vector_store, bm25_retriever)
+
+# KG 服务（由 main.py 注入）
+_neo4j_service = None
+_entity_extractor = None
+
+
+def init_documents_kg(neo4j_service, entity_extractor):
+    global _neo4j_service, _entity_extractor
+    _neo4j_service = neo4j_service
+    _entity_extractor = entity_extractor
 
 
 @router.post("/upload", response_model=DocumentResponse)
@@ -33,12 +49,16 @@ def upload_document(
     file: UploadFile = File(...),
     title: str = Form(""),
     category: str = Form("default"),
+    store: str = Form("vector"),
     knowledge_base_ids: str = Form("[]"),
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required")
+
+    if store not in VALID_STORES:
+        raise HTTPException(status_code=400, detail=f"Invalid store value: {store}, must be vector/graph/both")
 
     ext = Path(file.filename).suffix.lower()
     if ext not in SUPPORTED_EXTENSIONS:
@@ -51,7 +71,6 @@ def upload_document(
         shutil.copyfileobj(file.file, f)
     file.file.close()
 
-    import json
     kb_ids = json.loads(knowledge_base_ids)
 
     document = Document(
@@ -59,6 +78,7 @@ def upload_document(
         doc_type=ext.lstrip("."),
         category=category,
         file_path=str(save_path),
+        store=store,
         status=DocumentStatus.PENDING.value,
     )
     db.add(document)
@@ -77,7 +97,16 @@ def upload_document(
         document.status = DocumentStatus.PROCESSING.value
         db.commit()
 
-        doc_processor.process_document(document)
+        # ── 按 store 类型决定处理流程 ──
+        run_vector = store in ("vector", "both")
+        run_graph = store in ("graph", "both") and settings.enable_knowledge_graph
+
+        if run_vector:
+            doc_processor.process_document(document)
+
+        if run_graph:
+            if _neo4j_service and _entity_extractor and settings.kg_extract_on_upload:
+                _process_document_kg(document, db)
 
         document.status = DocumentStatus.READY.value
         db.commit()
@@ -89,10 +118,54 @@ def upload_document(
     return document
 
 
+def _process_document_kg(document: Document, db: Session):
+    """KG 处理：全文存 SQLite → LLM提取实体/关系 → 写入 Neo4j。"""
+    try:
+        raw_text = doc_processor.extract_text(document.file_path)
+        if not raw_text.strip():
+            logger.info("Doc %d: empty text, skipping KG", document.id)
+            return
+
+        # 全文存 SQLite（1条，不分块）
+        chunk = Chunk(
+            document_id=document.id,
+            content=raw_text,
+            chunk_index=0,
+            metadata_json=json.dumps({"source": "kg_full_text"}),
+        )
+        db.add(chunk)
+        db.flush()
+        chunk_ids = [chunk.id]
+        db.commit()
+
+        # LLM 提取实体和关系
+        result = _entity_extractor.extract(raw_text)
+
+        if not result["entities"]:
+            logger.info("Doc %d: no entities found", document.id)
+            return
+
+        logger.info(
+            "Doc %d: %d entities, %d relations",
+            document.id, len(result["entities"]),
+            len(result["relationships"]),
+        )
+
+        # 写入 Neo4j
+        _neo4j_service.import_extraction(
+            chunk_ids=chunk_ids,
+            entities=result["entities"],
+            relationships=result["relationships"],
+        )
+    except Exception as e:
+        logger.error("Doc %d KG processing failed (non-fatal): %s", document.id, e)
+
+
 @router.get("", response_model=DocumentListResponse)
 def list_documents(
     category: str | None = None,
     status: str | None = None,
+    store: str | None = Query(None, description="Filter by store type: vector, graph, both"),
     knowledge_base_id: int | None = None,
     skip: int = 0,
     limit: int = 20,
@@ -104,6 +177,8 @@ def list_documents(
         query = query.filter(Document.category == category)
     if status:
         query = query.filter(Document.status == status)
+    if store:
+        query = query.filter(Document.store == store)
     if knowledge_base_id:
         query = query.join(document_knowledge_base).filter(
             document_knowledge_base.c.knowledge_base_id == knowledge_base_id
@@ -147,6 +222,50 @@ def delete_document(document_id: int, user: User = Depends(require_admin), db: S
     db.delete(document)
     db.commit()
     return {"message": "deleted"}
+
+
+@router.get("/{document_id}/chunks")
+def get_document_chunks(
+    document_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """获取指定文档的分块内容。
+
+    向量存储的文档从 ChromaDB 查询分块；
+    图谱存储的文档从 SQLite chunks 表查询（全文一条）。
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    chunks = []
+
+    if document.store in ("vector", "both"):
+        try:
+            chunks = vector_store.get_document_chunks(document_id)
+        except Exception as e:
+            logger.warning("ChromaDB chunk query failed for doc %d: %s", document_id, e)
+
+    elif document.store == "graph":
+        try:
+            sql_chunks = (
+                db.query(Chunk)
+                .filter(Chunk.document_id == document_id)
+                .order_by(Chunk.chunk_index)
+                .all()
+            )
+            for c in sql_chunks:
+                chunks.append({
+                    "chunk_id": str(c.id),
+                    "chunk_index": c.chunk_index,
+                    "content": c.content,
+                    "metadata": json.loads(c.metadata_json) if c.metadata_json else {},
+                })
+        except Exception as e:
+            logger.warning("SQLite chunk query failed for doc %d: %s", document_id, e)
+
+    return {"document_id": document_id, "chunks": chunks}
 
 
 @router.put("/{document_id}/knowledge-bases")

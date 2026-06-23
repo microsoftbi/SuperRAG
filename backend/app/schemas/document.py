@@ -15,6 +15,7 @@ class DocumentResponse(BaseModel):
     doc_type: str
     category: str
     status: str
+    store: str = "vector"
     knowledge_base_ids: list[int] = []
     created_at: datetime.datetime
 

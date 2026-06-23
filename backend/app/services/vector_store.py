@@ -59,3 +59,24 @@ class VectorStoreService:
 
     def delete_by_ids(self, ids: list[str]):
         self.collection.delete(ids=ids)
+
+    def get_document_chunks(self, document_id: int) -> list[dict]:
+        """查询 ChromaDB 中指定文档的所有分块（按 chunk_index 排序）。"""
+        results = self.collection.get(
+            where={"document_id": document_id},
+            include=["documents", "metadatas"],
+        )
+        if not results["ids"]:
+            return []
+        items = []
+        # ChromaDB .get() 返回扁平列表（不同于 .query() 的嵌套列表）
+        for i in range(len(results["ids"])):
+            meta = results["metadatas"][i] if results["metadatas"] else {}
+            items.append({
+                "chunk_id": results["ids"][i],
+                "chunk_index": meta.get("chunk_index", 0) if isinstance(meta, dict) else 0,
+                "content": results["documents"][i],
+                "metadata": meta if isinstance(meta, dict) else {},
+            })
+        items.sort(key=lambda x: x["chunk_index"])
+        return items

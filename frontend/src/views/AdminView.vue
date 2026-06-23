@@ -21,17 +21,27 @@
       <DashboardView v-if="activeTab === 'dashboard'" />
       <DocumentUploader v-if="activeTab === 'docs'" @uploaded="loadDocuments" />
       <div v-if="activeTab === 'docs'" class="doc-list">
-        <h2>文档列表</h2>
+        <div class="doc-tabs">
+          <button
+            :class="['doc-tab', { active: docFilter === 'vector' }]"
+            @click="docFilter = 'vector'; loadDocuments()"
+          >向量存储</button>
+          <button
+            :class="['doc-tab', { active: docFilter === 'graph' }]"
+            @click="docFilter = 'graph'; loadDocuments()"
+          >图谱存储</button>
+        </div>
         <table>
           <thead>
             <tr>
-              <th>标题</th><th>类型</th><th>知识库</th><th>状态</th><th>上传时间</th><th>操作</th>
+              <th>标题</th><th>类型</th><th>存储目标</th><th>知识库</th><th>状态</th><th>上传时间</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="doc in documents" :key="doc.id">
               <td>{{ doc.title }}</td>
               <td>{{ doc.doc_type }}</td>
+              <td><span :class="['store-badge', doc.store]">{{ storeLabel(doc.store) }}</span></td>
               <td>
                 <div class="kb-badges">
                   <span v-for="kid in (doc.knowledge_base_ids || [])" :key="kid" class="badge">
@@ -46,12 +56,13 @@
                 </span>
               </td>
               <td>{{ new Date(doc.created_at).toLocaleString() }}</td>
-              <td>
+              <td class="actions">
+                <button v-if="docFilter === 'vector' || doc.store === 'both'" @click="viewChunks(doc)" class="chunk-btn">查看分块</button>
                 <button @click="remove(doc.id)" class="delete-btn">删除</button>
               </td>
             </tr>
             <tr v-if="documents.length === 0">
-              <td colspan="6" class="empty">暂无文档</td>
+              <td colspan="7" class="empty">暂无文档</td>
             </tr>
           </tbody>
         </table>
@@ -60,8 +71,17 @@
       <SettingsPanel v-if="activeTab === 'settings'" />
       <FeedbackPanel v-if="activeTab === 'feedback'" />
       <KnowledgeBaseManager v-if="activeTab === 'knowledge-bases'" />
+      <KnowledgeGraphViewer v-if="activeTab === 'knowledge-graph'" />
       <UserManager v-if="activeTab === 'users'" />
+      <Nl2SqlPanel v-if="activeTab === 'nl2sql'" />
     </div>
+
+    <DocumentChunkViewer
+      v-if="chunkViewerDoc"
+      :document-id="chunkViewerDoc.id"
+      :doc-title="chunkViewerDoc.title"
+      @close="chunkViewerDoc = null"
+    />
   </div>
 </template>
 
@@ -74,6 +94,9 @@ import SettingsPanel from '../components/admin/SettingsPanel.vue'
 import FeedbackPanel from '../components/admin/FeedbackPanel.vue'
 import KnowledgeBaseManager from '../components/admin/KnowledgeBaseManager.vue'
 import UserManager from '../components/admin/UserManager.vue'
+import KnowledgeGraphViewer from '../components/admin/KnowledgeGraphViewer.vue'
+import DocumentChunkViewer from '../components/admin/DocumentChunkViewer.vue'
+import Nl2SqlPanel from '../components/admin/Nl2SqlPanel.vue'
 import { listDocuments, deleteDocument, listKnowledgeBases } from '../api/index.js'
 import { useRouter } from 'vue-router'
 
@@ -86,19 +109,26 @@ function logout() {
 }
 
 const activeTab = ref('dashboard')
+const docFilter = ref('vector')
 const tabs = [
   { key: 'dashboard', label: '仪表盘' },
   { key: 'docs', label: '文档管理' },
   { key: 'knowledge-bases', label: '知识库' },
+  { key: 'knowledge-graph', label: '知识图谱' },
   { key: 'users', label: '用户管理' },
   { key: 'logs', label: '问答日志' },
   { key: 'feedback', label: '用户反馈' },
   { key: 'settings', label: '参数配置' },
+{ key: 'nl2sql', label: 'NL2SQL' },
 ]
 
 const documents = ref([])
 const kbMap = ref({})
+const chunkViewerDoc = ref(null)
 const statusMap = { pending: '待处理', processing: '处理中', ready: '就绪', failed: '失败' }
+
+const storeLabels = { vector: '向量', graph: '图谱', both: '全部' }
+function storeLabel(s) { return storeLabels[s] || s }
 
 function getKbName(id) {
   return kbMap.value[id] || `ID:${id}`
@@ -106,13 +136,17 @@ function getKbName(id) {
 
 async function loadDocuments() {
   const [docRes, kbRes] = await Promise.all([
-    listDocuments({ limit: 100 }),
+    listDocuments({ limit: 100, store: docFilter.value }),
     listKnowledgeBases(),
   ])
   documents.value = docRes.data.items
   for (const kb of kbRes.data) {
     kbMap.value[kb.id] = kb.name
   }
+}
+
+function viewChunks(doc) {
+  chunkViewerDoc.value = doc
 }
 
 async function remove(id) {
@@ -151,9 +185,44 @@ th { background: #f5f5f5; font-weight: 600; }
 .status.failed { background: #ffebee; color: #c62828; }
 .status.processing { background: #fff3e0; color: #ef6c00; }
 .status.pending { background: #f5f5f5; color: #666; }
-.delete-btn { padding: 4px 12px; background: #ef5350; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.actions { white-space: nowrap; }
+.delete-btn { padding: 4px 10px; background: #ef5350; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px; }
+.chunk-btn { padding: 4px 10px; background: #1976d2; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.chunk-btn:hover { background: #1565c0; }
 .empty { text-align: center; color: #999; padding: 24px; }
 .kb-badges { display: flex; gap: 3px; flex-wrap: wrap; }
 .badge { padding: 1px 6px; background: #e3f2fd; color: #1565c0; border-radius: 3px; font-size: 11px; }
 .no-kb { color: #ccc; }
+
+.doc-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #e0e0e0;
+}
+.doc-tab {
+  padding: 6px 18px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #666;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.doc-tab.active {
+  color: #1976d2;
+  border-bottom-color: #1976d2;
+  font-weight: 600;
+}
+.store-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.store-badge.vector { background: #e8f5e9; color: #2e7d32; }
+.store-badge.graph  { background: #fff3e0; color: #ef6c00; }
+.store-badge.both   { background: #e3f2fd; color: #1565c0; }
 </style>

@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     bm25_top_k: int = 10
     hybrid_fusion_k: int = 60
 
+    # Neo4j 知识图谱
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "neo4j"
+
+    # KG 功能开关
+    enable_knowledge_graph: bool = True
+    kg_extract_on_upload: bool = True
+
     class Config:
         env_file = ".env"
 

@@ -43,6 +43,18 @@
         <label>Chunk 大小</label>
         <input type="number" v-model.number="config.chunk_size" min="100" max="2000" step="100" />
       </div>
+      <div class="field">
+        <label>知识图谱遍历深度</label>
+        <input type="number" v-model.number="config.kg_max_depth" min="2" max="6" />
+        <span class="field-hint">值越大检索越广，但可能拉长响应时间（当前 2-6）</span>
+      </div>
+      <div class="field toggle-field">
+        <label class="toggle-label">
+          <input type="checkbox" v-model="config.nl2sql_detail_logging" />
+          <span>明细日志</span>
+        </label>
+        <span class="field-hint">勾选后，问数功能的 SQL 和提示词会写入问答日志</span>
+      </div>
       <button @click="save" :disabled="saving" class="save-btn">
         {{ saving ? '保存中...' : '保存配置' }}
       </button>
@@ -100,4 +112,8 @@ onMounted(load)
 .msg { font-size: 13px; }
 .msg.success { color: #2e7d32; }
 .msg.error { color: #c62828; }
+.field-hint { font-size: 11px; color: #999; }
+.toggle-field { flex-direction: row; align-items: center; gap: 8px; }
+.toggle-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 13px; color: #555; }
+.toggle-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
 </style>

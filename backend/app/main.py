@@ -8,15 +8,65 @@ from app.config import ensure_dirs, settings
 from app.database import init_db, SessionLocal
 from app.models.user import User
 from app.services.auth_service import hash_password
-from app.api import chat, documents, logs, feedback, config, stats, alerts, auth, knowledge_bases, users
+from app.services.llm_service import LLMService
+from app.services.neo4j_service import Neo4jService
+from app.api import chat, documents, logs, feedback, config, stats, alerts, auth, knowledge_bases, users, knowledge_graph, nl2sql
+from app.kg.entity_extractor import EntityExtractor
+
+# ── 全局服务实例 ──
+neo4j_service: Neo4jService | None = None
+llm_service = LLMService()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global neo4j_service
+
     ensure_dirs()
     init_db()
     _create_default_admin()
+
+    # ★ Neo4j 初始化
+    if settings.enable_knowledge_graph:
+        try:
+            neo4j_service = Neo4jService(
+                uri=settings.neo4j_uri,
+                user=settings.neo4j_user,
+                password=settings.neo4j_password,
+            )
+            neo4j_service.initialize()
+            print("✅ Neo4j connected and initialized")
+
+            # 注入 KG 依赖到各模块
+            entity_extractor = EntityExtractor(llm_service)
+
+            knowledge_graph.init_kg_routes(neo4j_service, entity_extractor, documents.doc_processor)
+            await chat.init_chat_kg(neo4j_service, SessionLocal)
+            documents.init_documents_kg(neo4j_service, entity_extractor)
+
+            print("✅ KG routes initialized")
+        except Exception as e:
+            print(f"⚠️  Neo4j initialization failed (KG will be disabled): {e}")
+            neo4j_service = None
+
+    # ★ NL2SQL agent 初始化（独立于 KG）
+    try:
+        from app.agents.agent_factory import init_nl2sql_agent
+        await init_nl2sql_agent()
+        print("✅ NL2SQL agent initialized")
+    except Exception as e:
+        print(f"⚠️  NL2SQL agent initialization failed: {e}")
+
     yield
+
+    # 清理
+    if neo4j_service:
+        neo4j_service.close()
+        print("Neo4j connection closed")
+
+    from app.agents.agent_factory import close_agent, close_nl2sql_agent
+    await close_agent()
+    await close_nl2sql_agent()
 
 
 def _create_default_admin():
@@ -59,6 +109,12 @@ app.include_router(alerts.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(knowledge_bases.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
+app.include_router(nl2sql.router, prefix="/api/v1")
+
+# ★ KG 路由（只有启用时才注册）
+if settings.enable_knowledge_graph:
+    app.include_router(knowledge_graph.router, prefix="/api/v1")
+    print("✅ Knowledge graph routes registered")
 
 
 @app.get("/health")

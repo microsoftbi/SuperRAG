@@ -2,8 +2,9 @@
   <div class="log-viewer">
     <div class="log-header">
       <h2>问答日志</h2>
-      <div class="filters">
+      <div class="log-actions">
         <input v-model="searchSession" placeholder="会话ID筛选" @input="loadLogs" />
+        <button class="clear-btn" @click="handleClear">清空日志</button>
       </div>
     </div>
     <div v-if="logs.length === 0" class="empty">暂无日志记录</div>
@@ -34,6 +35,20 @@
           <span class="label">Token数：</span>
           <span>{{ log.token_count }}</span>
         </div>
+        <div v-if="log.nl2sql_sql" class="detail-row nl2sql-block">
+          <span class="label">生成的SQL：</span>
+          <div class="code-block">
+            <code>{{ log.nl2sql_sql }}</code>
+            <button class="copy-btn" @click.stop="copyText(log.nl2sql_sql)">复制</button>
+          </div>
+        </div>
+        <div v-if="log.nl2sql_prompt" class="detail-row nl2sql-block">
+          <span class="label">SQL提示词：</span>
+          <div class="code-block">
+            <code>{{ log.nl2sql_prompt }}</code>
+            <button class="copy-btn" @click.stop="copyText(log.nl2sql_prompt)">复制</button>
+          </div>
+        </div>
       </div>
     </div>
     <div v-if="hasMore" class="load-more">
@@ -44,7 +59,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { listLogs } from '../../api/index.js'
+import { listLogs, clearLogs } from '../../api/index.js'
 
 const logs = ref([])
 const expanded = ref({})
@@ -80,13 +95,32 @@ async function loadMore() {
 }
 
 onMounted(loadLogs)
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).catch(() => {})
+}
+
+async function handleClear() {
+  if (!confirm('确定清空所有问答日志？此操作不可撤销。')) return
+  try {
+    await clearLogs()
+    logs.value = []
+    hasMore.value = false
+  } catch { /* ignore */ }
+}
 </script>
 
 <style scoped>
 .log-viewer { }
 .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .log-header h2 { font-size: 16px; }
-.filters input { padding: 6px 10px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 13px; width: 200px; }
+.log-actions { display: flex; gap: 8px; align-items: center; }
+.log-actions input { padding: 6px 10px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 13px; width: 200px; }
+.clear-btn {
+  padding: 6px 12px; font-size: 12px; color: #c62828; background: #fff;
+  border: 1px solid #e57373; border-radius: 4px; cursor: pointer;
+}
+.clear-btn:hover { background: #ffebee; }
 .empty { text-align: center; color: #999; padding: 40px; }
 .log-card {
   padding: 12px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 8px; cursor: pointer;
@@ -104,4 +138,19 @@ onMounted(loadLogs)
 .label { color: #888; margin-right: 4px; }
 .load-more { text-align: center; margin-top: 12px; }
 .load-more button { padding: 6px 20px; border: 1px solid #d0d0d0; border-radius: 4px; background: #fff; cursor: pointer; font-size: 13px; }
+.nl2sql-block { margin-top: 8px; }
+.code-block {
+  position: relative; margin-top: 4px; max-height: 300px; overflow: auto;
+  background: #f6f8fa; border: 1px solid #dde0e4; border-radius: 6px; padding: 10px;
+}
+.code-block code {
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; color: #333;
+}
+.copy-btn {
+  position: absolute; top: 6px; right: 6px;
+  font-size: 11px; color: #1976d2; background: #fff;
+  border: 1px solid #1976d2; border-radius: 4px; padding: 2px 8px; cursor: pointer;
+}
+.copy-btn:hover { background: #e3f2fd; }
 </style>

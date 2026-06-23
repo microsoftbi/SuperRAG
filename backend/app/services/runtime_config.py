@@ -19,6 +19,8 @@ DEFAULT_CONFIG = {
     "chunk_size": settings.chunk_size,
     "chunk_overlap": settings.chunk_overlap,
     "llm_temperature": 0.7,
+    "kg_max_depth": 5,
+    "nl2sql_detail_logging": False,
 }
 
 

@@ -15,6 +15,7 @@ class ChatRequest(BaseModel):
     session_id: str
     query: str
     history: list[dict[str, str]] = []
+    mode: str = "rag"
 
 
 class ChatResponse(BaseModel):

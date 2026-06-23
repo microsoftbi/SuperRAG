@@ -11,9 +11,12 @@ class ConversationLogResponse(BaseModel):
     rewritten_query: str | None = None
     answer: str
     sources: str = "[]"
+    route: str = "RAG"
     latency_ms: int = 0
     token_count: int = 0
     model: str = ""
+    nl2sql_prompt: str | None = None
+    nl2sql_sql: str | None = None
     created_at: datetime.datetime
 
     class Config:

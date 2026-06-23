@@ -2,45 +2,37 @@
   <div class="chat-window">
     <div class="messages" ref="messagesRef">
       <div v-if="messages.length === 0" class="empty-state">
-        您好！我是客服助手，请描述您遇到的问题。
+        您好！请输入业务数据查询问题。
       </div>
       <MessageBubble
         v-for="(msg, i) in messages"
         :key="i"
         :role="msg.role"
         :content="msg.content"
-        :sources="msg.sources"
         :result-data="msg.resultData"
         :loading="msg.role === 'assistant' && i === messages.length - 1 && loading"
         :feedback="msg.feedback || ''"
         @feedback="(rating) => handleFeedback(i, rating)"
-        @show-graph="showMiniGraph"
       />
     </div>
     <div class="input-area">
       <textarea
         v-model="input"
         @keydown.enter.exact="send"
-        placeholder="请输入您的问题..."
+        placeholder="请输入业务数据查询问题..."
         :disabled="loading"
         rows="2"
       />
       <button @click="send" :disabled="loading || !input.trim()">
-        {{ loading ? '思考中...' : '发送' }}
+        {{ loading ? '查询中...' : '发送' }}
       </button>
     </div>
-    <MiniGraphModal
-      :visible="graphModalVisible"
-      :graphData="graphModalData"
-      @close="graphModalVisible = false"
-    />
   </div>
 </template>
 
 <script setup>
 import { ref, nextTick, watch, onMounted } from 'vue'
 import MessageBubble from './MessageBubble.vue'
-import MiniGraphModal from './MiniGraphModal.vue'
 import { sendChatMessage, submitFeedback, getChatHistory } from '../../api/index.js'
 
 const props = defineProps({
@@ -51,15 +43,12 @@ const input = ref('')
 const loading = ref(false)
 const messages = ref([])
 const messagesRef = ref(null)
-const graphModalVisible = ref(false)
-const graphModalData = ref({ nodes: [], edges: [] })
 
 function loadHistory() {
   if (!props.sessionKey) return
-  localStorage.setItem('chat_session_id', props.sessionKey)
-  // 先清空，再加载历史（新会话无消息时显示空对话）
+  localStorage.setItem('nl2sql_session_id', props.sessionKey)
   messages.value = []
-  getChatHistory(props.sessionKey)
+  getChatHistory(props.sessionKey, 'nl2sql')
     .then(res => {
       if (res.data?.messages?.length) {
         messages.value = res.data.messages
@@ -68,18 +57,11 @@ function loadHistory() {
         })
       }
     })
-    .catch(() => {
-      // 静默失败
-    })
+    .catch(() => {})
 }
 
 onMounted(loadHistory)
 watch(() => props.sessionKey, loadHistory)
-
-function showMiniGraph(data) {
-  graphModalData.value = data
-  graphModalVisible.value = true
-}
 
 async function send() {
   if (!input.value.trim() || loading.value) return
@@ -87,11 +69,10 @@ async function send() {
   messages.value.push({ role: 'user', content: query })
   input.value = ''
   loading.value = true
-
   messages.value.push({ role: 'assistant', content: '', sources: [] })
 
   try {
-    const response = await sendChatMessage(props.sessionKey, query, 'rag')
+    const response = await sendChatMessage(props.sessionKey, query, 'nl2sql')
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -113,10 +94,16 @@ async function send() {
             messages.value[messages.value.length - 1].content += parsed.content
           } else if (parsed.type === 'sources') {
             messages.value[messages.value.length - 1].sources = parsed.sources
+            // 提取 sources 中的 resultData
+            for (const s of (parsed.sources || [])) {
+              if (s.resultData) {
+                messages.value[messages.value.length - 1].resultData = s.resultData
+              }
+            }
           } else if (parsed.type === 'result') {
             messages.value[messages.value.length - 1].resultData = parsed.content || ''
           }
-        } catch { /* skip partial lines */ }
+        } catch { /* skip */ }
       }
     }
   } catch (err) {
@@ -133,13 +120,8 @@ async function handleFeedback(index, rating) {
   if (!msg || msg.feedback) return
   msg.feedback = rating
   try {
-    await submitFeedback({
-      session_id: props.sessionKey,
-      rating,
-    })
-  } catch {
-    // silently fail
-  }
+    await submitFeedback({ session_id: props.sessionKey, rating })
+  } catch { /* ignore */ }
 }
 </script>
 

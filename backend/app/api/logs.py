@@ -36,3 +36,15 @@ def get_log(log_id: int, user: User = Depends(require_admin), db: Session = Depe
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Log not found")
     return log
+
+
+@router.delete("")
+def clear_logs(
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """清空所有问答日志。"""
+    count = db.query(ConversationLog).count()
+    db.query(ConversationLog).delete()
+    db.commit()
+    return {"deleted": count, "message": f"已清空 {count} 条日志"}
