@@ -169,7 +169,11 @@ class Neo4jService:
         """获取全局图谱（前端可视化用），返回 {nodes, edges}。
 
         兼容 :Entity（有 internal_id）和 :Person 等其他标签的节点。
+        无 internal_id 的节点会自动补一个 UUID，以便后续编辑/删除。
         """
+        # 旧数据兼容：先补 internal_id
+        self.ensure_internal_ids()
+
         with self.driver.session() as session:
             # 读取所有节点
             result = session.run(
@@ -178,7 +182,8 @@ class Neo4jService:
                 WHERE e.name IS NOT NULL
                 RETURN e.name AS name, labels(e) AS labels,
                        e.internal_id AS internal_id, e.type AS e_type,
-                       e.chunk_ids AS chunk_ids
+                       e.chunk_ids AS chunk_ids,
+                       e.properties AS properties
                 """
             )
             all_records = list(result)
@@ -219,6 +224,8 @@ class Neo4jService:
                     "name": name,
                     "type": ntype,
                     "chunk_count": chunk_count,
+                    "properties": rec["properties"] or "{}",
+                    "labels": rec["labels"] or [],
                 }
                 node_map[name] = node_data
                 nodes.append(node_data)
@@ -260,3 +267,151 @@ class Neo4jService:
         )
         with self.driver.session() as session:
             session.run(query, src=source_name, dst=target_name)
+
+    # ═══════════════════════════════════════════════
+    # 节点维护（管理后台）
+    # ═══════════════════════════════════════════════
+
+    def find_entity_by_id(self, internal_id: str) -> dict | None:
+        """按 internal_id 查节点。"""
+        with self.driver.session() as session:
+            rec = session.run(
+                """
+                MATCH (e)
+                WHERE e.internal_id = $id
+                RETURN e.name AS name, e.type AS type,
+                       e.properties AS properties,
+                       e.chunk_ids AS chunk_ids,
+                       labels(e) AS labels
+                """,
+                id=internal_id,
+            ).single()
+            if not rec:
+                return None
+            return {
+                "id": internal_id,
+                "name": rec["name"],
+                "type": rec["type"],
+                "properties": rec["properties"],
+                "chunk_ids": rec["chunk_ids"] or [],
+                "labels": rec["labels"] or [],
+            }
+
+    def count_entity_relationships(self, internal_id: str) -> int:
+        """统计节点的关系数（用于删除前告警）。"""
+        with self.driver.session() as session:
+            rec = session.run(
+                """
+                MATCH (e)-[r]-()
+                WHERE e.internal_id = $id
+                RETURN count(r) AS cnt
+                """,
+                id=internal_id,
+            ).single()
+            return int(rec["cnt"]) if rec else 0
+
+    def update_entity(self, internal_id: str, name: str, type: str,
+                       properties: dict) -> dict | None:
+        """按 internal_id 改节点的 name / type / properties，保留所有关系。
+
+        若 new_name 已被另一个节点占用，返回 None（调用方决定怎么做）。
+        """
+        props_json = json.dumps(properties or {}, ensure_ascii=False)
+        with self.driver.session() as session:
+            # 1. 找到当前节点
+            current = session.run(
+                "MATCH (e) WHERE e.internal_id = $id RETURN e.name AS cur_name",
+                id=internal_id,
+            ).single()
+            if not current:
+                return None
+            cur_name = current["cur_name"]
+
+            # 2. 若改名了，先检查目标名是否被别人占用
+            if name != cur_name:
+                conflict = session.run(
+                    """
+                    MATCH (e) WHERE e.name = $name AND e.internal_id <> $id
+                    RETURN e.internal_id AS other_id LIMIT 1
+                    """,
+                    name=name, id=internal_id,
+                ).single()
+                if conflict:
+                    return {"conflict": True, "other_id": conflict["other_id"]}
+
+            # 3. 更新
+            session.run(
+                """
+                MATCH (e) WHERE e.internal_id = $id
+                SET e.name = $name,
+                    e.type = $type,
+                    e.properties = $props
+                """,
+                id=internal_id, name=name, type=type, props=props_json,
+            )
+            return {"conflict": False, "id": internal_id, "name": name, "type": type}
+
+    def delete_entity(self, internal_id: str) -> bool:
+        """删除节点及其所有关系。"""
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (e) WHERE e.internal_id = $id
+                WITH e, count{(e)-[]-()} AS rel_count
+                DETACH DELETE e
+                RETURN rel_count
+                """,
+                id=internal_id,
+            ).single()
+            return result is not None
+
+    def update_relationship(self, source_name: str, target_name: str,
+                             old_type: str, new_type: str) -> bool:
+        """改关系类型：删旧 + 建新。
+
+        因 Neo4j 不支持直接改 type，必须重建。源/目标实体不变。
+        """
+        old_clean = old_type.replace(" ", "_").replace("-", "_")
+        new_clean = new_type.replace(" ", "_").replace("-", "_")
+        with self.driver.session() as session:
+            # 先确认有源边
+            rec = session.run(
+                f"""
+                MATCH (a {{name: $src}})-[r:`{old_clean}`]->(b {{name: $dst}})
+                RETURN count(r) AS cnt
+                """,
+                src=source_name, dst=target_name,
+            ).single()
+            if not rec or rec["cnt"] == 0:
+                return False
+            # 删旧建新
+            session.run(
+                f"""
+                MATCH (a {{name: $src}})-[r:`{old_clean}`]->(b {{name: $dst}})
+                DELETE r
+                """,
+                src=source_name, dst=target_name,
+            )
+            session.run(
+                f"""
+                MATCH (a {{name: $src}}), (b {{name: $dst}})
+                MERGE (a)-[:`{new_clean}`]->(b)
+                """,
+                src=source_name, dst=target_name,
+            )
+            return True
+
+    def ensure_internal_ids(self) -> int:
+        """为所有缺 internal_id 的节点补一个 UUID（旧数据兼容）。
+
+        返回补写的节点数。
+        """
+        with self.driver.session() as session:
+            rec = session.run(
+                """
+                MATCH (e) WHERE e.name IS NOT NULL AND e.internal_id IS NULL
+                SET e.internal_id = randomUUID()
+                RETURN count(e) AS cnt
+                """
+            ).single()
+            return int(rec["cnt"]) if rec else 0

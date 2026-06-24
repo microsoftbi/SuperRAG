@@ -43,6 +43,12 @@ class EntityCreate(BaseModel):
     properties: dict = {}
 
 
+class EntityUpdate(BaseModel):
+    name: str
+    type: str
+    properties: dict = {}
+
+
 class RelationshipCreate(BaseModel):
     source: str
     target: str
@@ -53,6 +59,13 @@ class RelationshipDelete(BaseModel):
     source: str
     target: str
     type: str
+
+
+class RelationshipUpdate(BaseModel):
+    source: str
+    target: str
+    old_type: str
+    new_type: str
 
 
 # ── 路由 ──
@@ -228,5 +241,86 @@ def delete_relationship(
     try:
         _neo4j_service.delete_relationship(data.source, data.target, data.type)
         return {"message": "deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/relationships")
+def update_relationship(
+    data: RelationshipUpdate,
+    user: User = Depends(require_admin),
+):
+    """修改关系类型（删旧+建新）。"""
+    if not _neo4j_service:
+        raise HTTPException(status_code=503, detail="Neo4j service not initialized")
+    try:
+        ok = _neo4j_service.update_relationship(
+            data.source, data.target, data.old_type, data.new_type,
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="Relationship not found")
+        return {"message": "updated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/entities/{entity_id}")
+def update_entity(
+    entity_id: str,
+    data: EntityUpdate,
+    user: User = Depends(require_admin),
+):
+    """修改节点（name / type / properties），保留所有关系。"""
+    if not _neo4j_service:
+        raise HTTPException(status_code=503, detail="Neo4j service not initialized")
+    try:
+        result = _neo4j_service.update_entity(
+            entity_id, data.name, data.type, data.properties,
+        )
+        if result is None:
+            raise HTTPException(status_code=404, detail="Entity not found")
+        if result.get("conflict"):
+            raise HTTPException(
+                status_code=409,
+                detail=f"名称 '{data.name}' 已被另一个节点使用",
+            )
+        return {"message": "updated", "id": entity_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/entities/{entity_id}")
+def delete_entity(
+    entity_id: str,
+    user: User = Depends(require_admin),
+):
+    """删除节点及其所有关系。"""
+    if not _neo4j_service:
+        raise HTTPException(status_code=503, detail="Neo4j service not initialized")
+    try:
+        ok = _neo4j_service.delete_entity(entity_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Entity not found")
+        return {"message": "deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/entities/{entity_id}/relationship-count")
+def get_entity_rel_count(
+    entity_id: str,
+    user: User = Depends(get_current_user),
+):
+    """获取节点的关系数（用于删除前确认）。"""
+    if not _neo4j_service:
+        raise HTTPException(status_code=503, detail="Neo4j service not initialized")
+    try:
+        return {"count": _neo4j_service.count_entity_relationships(entity_id)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -12,7 +12,7 @@ import time
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, text
+from sqlalchemy import func, text, update as sa_update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -61,13 +61,12 @@ async def chat(
 
     # ── NL2SQL 模式 ──
     if request.mode == "nl2sql":
-        reset_tool_state()
-
         nl2sql_agent = get_nl2sql_agent()
         if nl2sql_agent is None:
             return _error_response("NL2SQL Agent not initialized")
 
         thread_id = f"nl2sql_u{user.id}_{request.session_id}"
+        reset_tool_state(thread_id)
         config = {"configurable": {"thread_id": thread_id}}
 
         log_entry = ConversationLog(
@@ -107,15 +106,26 @@ async def chat(
                 full_answer += f"\n\n[NL2SQL 错误: {e}]"
                 yield f"data: {json.dumps({'type': 'token', 'content': str(e)}, ensure_ascii=False)}\n\n"
 
-            # 拉取工具收集的 sources（含 resultData）
+            # 拉取工具收集的 sources（含 resultData / chart spec）
             sources = get_collected_sources()
             if sources:
                 yield f"data: {json.dumps({'type': 'sources', 'sources': sources}, ensure_ascii=False)}\n\n"
+                # 把 sources 完整写入 log，供历史会话恢复（表格+图表）
+                try:
+                    stmt = (
+                        sa_update(ConversationLog)
+                        .where(ConversationLog.id == log_entry.id)
+                        .values(sources=json.dumps(sources, ensure_ascii=False))
+                    )
+                    db.execute(stmt)
+                    db.commit()
+                except Exception as e:
+                    logger.error("NL2SQL sources log update failed: %s", e, exc_info=True)
+                    db.rollback()
                 # 提取 NL2SQL 的 SQL 和提示词写入日志（受 nl2sql_detail_logging 开关控制）
                 from app.services.runtime_config import load_runtime_config
                 rt_cfg = load_runtime_config()
                 if rt_cfg.get("nl2sql_detail_logging", False):
-                    from sqlalchemy import update as sa_update
                     for s in sources:
                         if s.get("type") == "nl2sql":
                             try:

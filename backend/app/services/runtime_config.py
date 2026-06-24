@@ -21,6 +21,7 @@ DEFAULT_CONFIG = {
     "llm_temperature": 0.7,
     "kg_max_depth": 5,
     "nl2sql_detail_logging": False,
+    "nl2sql_max_rows": 50,
 }
 
 

@@ -48,6 +48,11 @@
         <input type="number" v-model.number="config.kg_max_depth" min="2" max="6" />
         <span class="field-hint">值越大检索越广，但可能拉长响应时间（当前 2-6）</span>
       </div>
+      <div class="field">
+        <label>问数最大返回行数</label>
+        <input type="number" v-model.number="config.nl2sql_max_rows" min="50" max="1000" step="10" />
+        <span class="field-hint">问数功能单次最多返回多少行（50–1000）。会注入到 SQL 的 TOP 子句</span>
+      </div>
       <div class="field toggle-field">
         <label class="toggle-label">
           <input type="checkbox" v-model="config.nl2sql_detail_logging" />

@@ -197,6 +197,22 @@ export function deleteRelationship(data) {
   return api.delete('/knowledge-graph/relationships', { data })
 }
 
+export function updateRelationship(data) {
+  return api.put('/knowledge-graph/relationships', data)
+}
+
+export function updateEntity(entityId, data) {
+  return api.put(`/knowledge-graph/entities/${entityId}`, data)
+}
+
+export function deleteEntity(entityId) {
+  return api.delete(`/knowledge-graph/entities/${entityId}`)
+}
+
+export function getEntityRelCount(entityId) {
+  return api.get(`/knowledge-graph/entities/${entityId}/relationship-count`)
+}
+
 // ── NL2SQL ──
 
 export function getNl2SqlConfig() {

@@ -6,7 +6,12 @@
       <div v-if="resultTable" class="result-table">
         <div class="result-table-toolbar">
           <span class="result-count">共 {{ resultTable.totalRows }} 行</span>
-          <button class="copy-csv-btn" @click="copyCsv" title="复制为CSV">📋 复制CSV</button>
+          <div class="toolbar-actions">
+            <button class="action-btn" @click="showChartPanel = !showChartPanel" title="生成图表">
+              📊 生成图表
+            </button>
+            <button class="action-btn" @click="copyCsv" title="复制为CSV">📋 复制CSV</button>
+          </div>
         </div>
         <div class="result-table-scroll">
           <table>
@@ -26,7 +31,15 @@
             </tbody>
           </table>
         </div>
+        <ChartConfigPanel
+          v-if="showChartPanel"
+          :columns="resultTable.columns"
+          :data="resultTable.rows"
+          @apply="(spec) => { localChartSpec = spec; showChartPanel = false }"
+          @close="showChartPanel = false"
+        />
       </div>
+      <ChartView v-if="effectiveChartSpec" :spec="effectiveChartSpec" />
       <SourceReference v-if="sources && sources.length > 0" :sources="sources" @show-graph="$emit('show-graph', $event)" />
       <div v-if="role === 'assistant' && content && !loading" class="feedback-actions">
         <button
@@ -47,6 +60,8 @@
 <script setup>
 import { ref, computed } from 'vue'
 import SourceReference from './SourceReference.vue'
+import ChartView from './ChartView.vue'
+import ChartConfigPanel from './ChartConfigPanel.vue'
 
 const props = defineProps({
   role: { type: String, required: true },
@@ -55,9 +70,16 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   feedback: { type: String, default: '' },
   resultData: { type: String, default: '' },
+  chartSpec: { type: Object, default: null },
 })
 
 const emit = defineEmits(['feedback', 'show-graph'])
+
+const showChartPanel = ref(false)
+const localChartSpec = ref(null)
+
+// LLM 生成的 chartSpec 优先,本地按钮生成的次之
+const effectiveChartSpec = computed(() => localChartSpec.value || props.chartSpec)
 
 const renderedContent = computed(() => {
   return props.content
@@ -146,12 +168,13 @@ function copyCsv() {
   margin-bottom: 6px; padding: 0 2px;
 }
 .result-count { font-size: 12px; color: #999; }
-.copy-csv-btn {
-  font-size: 11px; color: #1976d2; background: none;
+.toolbar-actions { display: flex; gap: 6px; }
+.action-btn {
+  font-size: 11px; color: #1976d2; background: #fff;
   border: 1px solid #1976d2; border-radius: 4px; padding: 2px 8px;
   cursor: pointer; line-height: 1.4;
 }
-.copy-csv-btn:hover { background: #e3f2fd; }
+.action-btn:hover { background: #e3f2fd; }
 .result-table-scroll {
   max-height: 420px; overflow: auto;
   border: 1px solid #dde0e4; border-radius: 8px;

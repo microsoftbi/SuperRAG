@@ -10,6 +10,7 @@
         :role="msg.role"
         :content="msg.content"
         :result-data="msg.resultData"
+        :chart-spec="msg.chartSpec"
         :loading="msg.role === 'assistant' && i === messages.length - 1 && loading"
         :feedback="msg.feedback || ''"
         @feedback="(rating) => handleFeedback(i, rating)"
@@ -51,7 +52,16 @@ function loadHistory() {
   getChatHistory(props.sessionKey, 'nl2sql')
     .then(res => {
       if (res.data?.messages?.length) {
-        messages.value = res.data.messages
+        // 从 sources 中提取 resultData 和 chartSpec
+        messages.value = res.data.messages.map(m => {
+          if (m.role !== 'assistant' || !m.sources?.length) return m
+          const out = { ...m }
+          for (const s of m.sources) {
+            if (s.resultData) out.resultData = s.resultData
+            if (s.type === 'chart' && s.spec) out.chartSpec = s.spec
+          }
+          return out
+        })
         nextTick().then(() => {
           messagesRef.value?.scrollTo({ top: messagesRef.value.scrollHeight })
         })
@@ -94,10 +104,14 @@ async function send() {
             messages.value[messages.value.length - 1].content += parsed.content
           } else if (parsed.type === 'sources') {
             messages.value[messages.value.length - 1].sources = parsed.sources
-            // 提取 sources 中的 resultData
+            // 提取 sources 中的 resultData / chart spec
             for (const s of (parsed.sources || [])) {
               if (s.resultData) {
                 messages.value[messages.value.length - 1].resultData = s.resultData
+              }
+              if (s.type === 'chart' && s.spec) {
+                // 取最后一次 make_chart 的 spec(若多次切换)
+                messages.value[messages.value.length - 1].chartSpec = s.spec
               }
             }
           } else if (parsed.type === 'result') {
