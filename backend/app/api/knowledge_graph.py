@@ -245,6 +245,27 @@ def delete_relationship(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/relationships/batch-delete")
+def batch_delete_relationships(
+    data: dict,
+    user: User = Depends(require_admin),
+):
+    """批量删除关系。"""
+    rels = data.get("relationships", [])
+    if not rels:
+        raise HTTPException(status_code=400, detail="relationships is required")
+    deleted = 0
+    for rel in rels:
+        try:
+            _neo4j_service.delete_relationship(
+                rel["source"], rel["target"], rel["type"],
+            )
+            deleted += 1
+        except Exception as e:
+            logger.warning("Failed to delete relationship: %s", e)
+    return {"message": f"deleted {deleted}/{len(rels)}"}
+
+
 @router.put("/relationships")
 def update_relationship(
     data: RelationshipUpdate,
@@ -310,6 +331,25 @@ def delete_entity(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/entities/batch-delete")
+def batch_delete_entities(
+    data: dict,
+    user: User = Depends(require_admin),
+):
+    """批量删除节点（含级联关系）。"""
+    ids = data.get("ids", [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids is required")
+    deleted = 0
+    for eid in ids:
+        try:
+            if _neo4j_service.delete_entity(eid):
+                deleted += 1
+        except Exception as e:
+            logger.warning("Failed to delete entity %s: %s", eid, e)
+    return {"message": f"deleted {deleted}/{len(ids)}"}
 
 
 @router.get("/entities/{entity_id}/relationship-count")

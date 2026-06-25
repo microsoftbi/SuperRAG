@@ -45,6 +45,7 @@ import { sendChatMessage, submitFeedback, getChatHistory } from '../../api/index
 
 const props = defineProps({
   sessionKey: { type: String, default: '' },
+  mode: { type: String, default: 'rag' },
 })
 
 const input = ref('')
@@ -56,10 +57,10 @@ const graphModalData = ref({ nodes: [], edges: [] })
 
 function loadHistory() {
   if (!props.sessionKey) return
-  localStorage.setItem('chat_session_id', props.sessionKey)
+  localStorage.setItem(props.mode === 'kg' ? 'kg_session_id' : 'chat_session_id', props.sessionKey)
   // 先清空，再加载历史（新会话无消息时显示空对话）
   messages.value = []
-  getChatHistory(props.sessionKey)
+  getChatHistory(props.sessionKey, props.mode)
     .then(res => {
       if (res.data?.messages?.length) {
         messages.value = res.data.messages
@@ -87,11 +88,15 @@ async function send() {
   messages.value.push({ role: 'user', content: query })
   input.value = ''
   loading.value = true
+  // 用户发送后立即滚动到底部
+  nextTick().then(() => {
+    messagesRef.value?.scrollTo({ top: messagesRef.value.scrollHeight, behavior: 'smooth' })
+  })
 
   messages.value.push({ role: 'assistant', content: '', sources: [] })
 
   try {
-    const response = await sendChatMessage(props.sessionKey, query, 'rag')
+    const response = await sendChatMessage(props.sessionKey, query, props.mode)
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -111,6 +116,10 @@ async function send() {
           const parsed = JSON.parse(data)
           if (parsed.type === 'token') {
             messages.value[messages.value.length - 1].content += parsed.content
+            // 流式生成时跟随滚动
+            nextTick().then(() => {
+              messagesRef.value?.scrollTo({ top: messagesRef.value.scrollHeight, behavior: 'smooth' })
+            })
           } else if (parsed.type === 'sources') {
             messages.value[messages.value.length - 1].sources = parsed.sources
           } else if (parsed.type === 'result') {

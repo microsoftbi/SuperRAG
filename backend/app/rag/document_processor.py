@@ -97,6 +97,6 @@ class DocumentProcessor:
         logger.info("Document %s processed into %d chunks", document.title, len(chunks))
 
         if self.bm25_retriever:
-            self.bm25_retriever.rebuild_index()
+            self.bm25_retriever.rebuild_async(vector_store=self.vector_store)
 
         return len(chunks)

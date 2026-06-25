@@ -45,6 +45,7 @@
         @edit="openNodeEditor"
         @delete="confirmDeleteNode"
         @locate="locateInGraph"
+        @batch-delete="confirmBatchDeleteNodes"
       />
       <KgEdgeTable
         v-if="activeTab === 'edges'"
@@ -52,6 +53,7 @@
         @new="openEdgeEditor(null)"
         @edit="openEdgeEditor"
         @delete="confirmDeleteEdge"
+        @batch-delete="confirmBatchDeleteEdges"
       />
     </div>
 
@@ -86,6 +88,7 @@ import KgEdgeEditor from './KgEdgeEditor.vue'
 import {
   getGraph, rebuildGraph as rebuildGraphApi,
   deleteEntity, deleteRelationship, getEntityRelCount,
+  batchDeleteEntities, batchDeleteRelationships,
 } from '../../api/index.js'
 
 const tabs = [
@@ -192,6 +195,31 @@ function nameOf(idOrName) {
   // edges 里的 source/target 是 node id
   const n = graphData.value.nodes.find(x => x.id === idOrName)
   return n ? n.name : idOrName
+}
+
+async function confirmBatchDeleteNodes(ids) {
+  if (!confirm(`确定批量删除 ${ids.length} 个节点及其所有关系？`)) return
+  try {
+    await batchDeleteEntities(ids)
+    await loadGraph()
+  } catch (e) {
+    alert('批量删除失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+async function confirmBatchDeleteEdges(edges) {
+  const rels = edges.map(e => ({
+    source: nameOf(e.source),
+    target: nameOf(e.target),
+    type: e.type,
+  }))
+  if (!confirm(`确定批量删除 ${rels.length} 条关系？`)) return
+  try {
+    await batchDeleteRelationships(rels)
+    await loadGraph()
+  } catch (e) {
+    alert('批量删除失败: ' + (e.response?.data?.detail || e.message))
+  }
 }
 
 function locateInGraph(node) {

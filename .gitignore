@@ -4,6 +4,10 @@ __pycache__/
 chroma_db/
 uploads/
 *.db
+*.db-shm
+*.db-wal
 node_modules/
 dist/
 .DS_Store
+MEMORY/
+=3.9.1

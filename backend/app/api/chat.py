@@ -26,7 +26,7 @@ from app.services.nl2sql_config import load_nl2sql_config
 from app.rag.retriever import Retriever
 from app.rag.query_rewriter import QueryRewriter
 from app.kg.graph_retriever import GraphRetriever
-from app.agents.agent_factory import get_agent, get_nl2sql_agent, init_agent
+from app.agents.agent_factory import get_rag_agent, get_kg_agent, get_nl2sql_agent
 from app.agents.tools import reset_tool_state, get_collected_sources, _build_minigraph
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -43,12 +43,10 @@ query_rewriter = QueryRewriter(llm_service)
 graph_retriever: GraphRetriever | None = None
 
 
-async def init_chat_kg(neo4j_service, db_factory):
-    """由 main.py 在 lifespan 中调用，注入 Neo4j 服务并启动 agent。"""
+def init_chat_kg(neo4j_service, db_factory=None):
+    """由 main.py 在 lifespan 中调用，注入 Neo4j 服务。"""
     global graph_retriever
-    graph_retriever = GraphRetriever(neo4j_service, db_factory)
-    # 用注入后的 retriever 创建 agent
-    await init_agent(rag_retriever, graph_retriever, query_rewriter)
+    graph_retriever = GraphRetriever(neo4j_service)
 
 
 @router.post("")
@@ -59,15 +57,39 @@ async def chat(
 ):
     start_time = time.time()
 
-    # ── NL2SQL 模式 ──
-    if request.mode == "nl2sql":
-        nl2sql_agent = get_nl2sql_agent()
-        if nl2sql_agent is None:
-            return _error_response("NL2SQL Agent not initialized")
+    # ── RAG/KG/NL2SQL 三路分发 ──
 
+    # ── KG 模式 ──
+    if request.mode == "kg":
+        agent = get_kg_agent()
+        if agent is None:
+            return _error_response("KG Agent not initialized（Neo4j 未连接）")
+        thread_id = f"kg_u{user.id}_{request.session_id}"
+        reset_tool_state(thread_id)
+        config = {"configurable": {"thread_id": thread_id}}
+        route = "KG"
+
+    # ── RAG 模式 ──
+    elif request.mode == "rag":
+        agent = get_rag_agent()
+        if agent is None:
+            return _error_response("RAG Agent not initialized")
+        thread_id = f"rag_u{user.id}_{request.session_id}"
+        reset_tool_state(thread_id)
+        config = {"configurable": {"thread_id": thread_id}}
+        route = "AGENT"
+
+    # ── NL2SQL 模式 ──
+    elif request.mode == "nl2sql":
+        agent = get_nl2sql_agent()
+        if agent is None:
+            return _error_response("NL2SQL Agent not initialized")
         thread_id = f"nl2sql_u{user.id}_{request.session_id}"
         reset_tool_state(thread_id)
         config = {"configurable": {"thread_id": thread_id}}
+        route = "NL2SQL"
+    else:
+        return _error_response(f"Unknown mode: {request.mode}")
 
         log_entry = ConversationLog(
             user_id=user.id,
@@ -163,32 +185,24 @@ async def chat(
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(nl2sql_stream(), media_type="text/event-stream")
-    agent = get_agent()
-    if agent is None:
-        return _error_response("Agent not initialized")
 
-    # ── 1. 重置 tool state ──
-    reset_tool_state()
+    # ── RAG/KG 共用处理 ──
 
-    # ── 2. Query 改写（基于历史对话）──
+    # ── 1. Query 改写（仅 RAG 模式有历史）──
     rewritten = request.query
-    if request.history:
+    if request.mode == "rag" and request.history:
         try:
             rewritten = query_rewriter.rewrite(request.query, request.history)
         except Exception as e:
             logger.warning("Query rewriting failed: %s", e)
 
-    # ── 3. 构造 thread_id：user_id + session_id 实现跨用户会话隔离 ──
-    thread_id = f"u{user.id}_{request.session_id}"
-    config = {"configurable": {"thread_id": thread_id}}
-
-    # ── 4. 创建 log 记录 ──
+    # ── 2. 创建 log 记录 ──
     log_entry = ConversationLog(
         user_id=user.id,
         session_id=request.session_id,
         query=request.query,
-        rewritten_query=rewritten,
-        route="AGENT",  # 统一标识
+        rewritten_query=rewritten if request.mode == "rag" else "",
+        route=route,
         answer="",
         sources="[]",
         latency_ms=0,
@@ -227,46 +241,39 @@ async def chat(
             full_answer += err_msg
             yield f"data: {json.dumps({'type': 'token', 'content': err_msg}, ensure_ascii=False)}\n\n"
 
-        # ── 6. 流结束后重跑检索生成 sources ──
-        # 工具内部的 module-level 变量在 deepagents 异步流中不可达，
-        # 因此直接在流结束后用 retrievers 重新生成 sources。
-        sources = []
+        # ── 6. 流结束后生成 sources ──
+        sources = get_collected_sources()
 
-        # 尝试 KG 检索
-        if graph_retriever:
-            try:
-                kg_ctx, kg_text, kg_cypher = graph_retriever.retrieve(request.query)
-                if kg_ctx or kg_text:
-                    minigraph = _build_minigraph(kg_text, kg_ctx)
-                    sources.append({
-                        "chunk_id": str(kg_ctx[0].get("chunk_id", "")) if kg_ctx else "",
-                        "document_title": "知识图谱",
-                        "content": "\n".join(kg_ctx[0].get("kg_paths", [])) if kg_ctx else kg_text,
-                        "score": min(kg_ctx[0].get("kg_score", 1.0) / 2.0, 1.0) if kg_ctx else 1.0,
-                        "type": "kg",
-                        "graph": minigraph,
-                        "cypher": kg_cypher,
-                    })
-            except Exception as e:
-                logger.debug("KG sources build skipped: %s", e)
-
-        # 尝试 RAG 检索
+        # Fallback：工具未调用时，按 mode 直接检索
         if not sources:
-            try:
-                rag_ctx, _ = rag_retriever.retrieve(rewritten)
-                if rag_ctx:
-                    sources = [
-                        {
+            if request.mode == "kg" and graph_retriever:
+                try:
+                    _, kg_text, kg_cypher = graph_retriever.retrieve(request.query)
+                    if kg_text:
+                        minigraph = _build_minigraph(kg_text)
+                        sources.append({
+                            "chunk_id": "",
+                            "document_title": "知识图谱",
+                            "content": kg_text,
+                            "score": 1.0,
+                            "type": "kg", "graph": minigraph, "cypher": kg_cypher,
+                        })
+                except Exception as e:
+                    logger.debug("KG sources build skipped: %s", e)
+
+            if request.mode == "rag":
+                try:
+                    rag_ctx, _ = rag_retriever.retrieve(rewritten)
+                    if rag_ctx:
+                        sources = [{
                             "chunk_id": ctx["id"],
                             "document_title": ctx.get("metadata", {}).get("document_title", ""),
                             "content": ctx["content"][:200],
                             "score": round(ctx.get("rerank_score", ctx.get("score", 0)), 4),
                             "type": "rag",
-                        }
-                        for ctx in rag_ctx[:5]
-                    ]
-            except Exception as e:
-                logger.debug("RAG sources build skipped: %s", e)
+                        } for ctx in rag_ctx[:5] if ctx.get("rerank_score", ctx.get("score", 0)) > 0]
+                except Exception as e:
+                    logger.debug("RAG sources build skipped: %s", e)
 
         # ── 7. 写入 log ──
         elapsed = int((time.time() - start_time) * 1000)
@@ -301,9 +308,12 @@ async def get_chat_history(
     if mode == "nl2sql":
         agent = get_nl2sql_agent()
         thread_id = f"nl2sql_u{user.id}_{session_id}"
+    elif mode == "kg":
+        agent = get_kg_agent()
+        thread_id = f"kg_u{user.id}_{session_id}"
     else:
-        agent = get_agent()
-        thread_id = f"u{user.id}_{session_id}"
+        agent = get_rag_agent()
+        thread_id = f"rag_u{user.id}_{session_id}"
 
     if agent is None:
         return {"messages": [], "session_id": session_id}
@@ -358,12 +368,14 @@ async def list_sessions(
 ):
     """列出当前用户的历史会话（按最后活跃时间倒序）。
 
-    mode=rag   → 查询 RAG/KG 会话（thread_id = u{user.id}_%）
-    mode=nl2sql → 查询 NL2SQL 会话（thread_id = nl2sql_u{user.id}_%）
+    mode=rag   → 查询 RAG 会话（route=AGENT）
+    mode=kg    → 查询 KG 会话（route=KG）
+    mode=nl2sql → 查询 NL2SQL 会话（route=NL2SQL）
     """
     # 从 conversation_logs 查询当前用户的会话聚合信息
     # 根据 mode 过滤 route
-    route_filter = "NL2SQL" if mode == "nl2sql" else "AGENT"
+    route_map = {"rag": "AGENT", "kg": "KG", "nl2sql": "NL2SQL"}
+    route_filter = route_map.get(mode, "AGENT")
     # 子查询：取每个 session 中 id 最小的记录即为第一条 query
     first_log_subq = (
         db.query(
@@ -380,6 +392,7 @@ async def list_sessions(
         db.query(
             ConversationLog.session_id,
             ConversationLog.query,
+            ConversationLog.session_title,
         )
         .join(
             first_log_subq,
@@ -404,16 +417,107 @@ async def list_sessions(
 
     # 拼装结果
     first_query_map = {r.session_id: r.query for r in first_queries}
+    title_map = {r.session_id: r.session_title for r in first_queries if r.session_title}
     result = []
     for sid, last_active, turn_count in sessions_data:
         result.append({
             "session_id": sid,
             "first_query": first_query_map.get(sid, ""),
+            "title": title_map.get(sid, ""),
             "last_active": last_active.isoformat() if last_active else "",
             "turn_count": turn_count or 0,
         })
 
     return {"sessions": result}
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    mode: str = "rag",
+):
+    """删除指定会话（含日志和 checkpoints）。"""
+    # 删除 conversation_logs
+    db.query(ConversationLog).filter(
+        ConversationLog.session_id == session_id,
+        ConversationLog.user_id == user.id,
+    ).delete()
+    db.commit()
+
+    # 删除 checkpoints（thread）
+    from app.agents.agent_factory import get_rag_agent, get_kg_agent, get_nl2sql_agent
+    if mode == "nl2sql":
+        agent = get_nl2sql_agent()
+        thread_id = f"nl2sql_u{user.id}_{session_id}"
+    elif mode == "kg":
+        agent = get_kg_agent()
+        thread_id = f"kg_u{user.id}_{session_id}"
+    else:
+        agent = get_rag_agent()
+        thread_id = f"rag_u{user.id}_{session_id}"
+    if agent:
+        try:
+            await agent.adelete_state({"configurable": {"thread_id": thread_id}})
+        except Exception:
+            pass
+
+    return {"message": "deleted"}
+
+
+@router.put("/sessions/{session_id}")
+async def rename_session(
+    session_id: str,
+    data: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """重命名会话。"""
+    title = data.get("title", "").strip()
+    if not title:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Title is required")
+
+    # 更新该 session 的第一条 log 的 session_title
+    first_log = (
+        db.query(ConversationLog)
+        .filter(
+            ConversationLog.session_id == session_id,
+            ConversationLog.user_id == user.id,
+        )
+        .order_by(ConversationLog.id.asc())
+        .first()
+    )
+    if not first_log:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    first_log.session_title = title
+    db.commit()
+    return {"message": "renamed", "title": title}
+
+
+@router.get("/sessions/{session_id}/title")
+async def get_session_title(
+    session_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取会话的自定义标题。"""
+    first_log = (
+        db.query(ConversationLog)
+        .filter(
+            ConversationLog.session_id == session_id,
+            ConversationLog.user_id == user.id,
+        )
+        .order_by(ConversationLog.id.asc())
+        .first()
+    )
+    if not first_log:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"title": first_log.session_title or ""}
 
 
 def _error_response(msg: str):

@@ -294,105 +294,68 @@ def build_nl2sql_tools():
     return [query_database, make_chart]
 
 
-def build_tools(rag_retriever, graph_retriever, query_rewriter=None):
-    logger.info("build_tools: rag=%s kg=%s", rag_retriever, graph_retriever)
-    """构建 deepagents tools，注入运行时依赖。"""
+def build_rag_tools(rag_retriever):
+    """构建 RAG deepagent tools（只含 search_knowledge_base）。"""
+    logger.info("build_rag_tools: rag=%s", rag_retriever)
 
     @tool
     def search_knowledge_base(query: str) -> str:
-        """从向量知识库中检索相关文档片段。
-
-        适用场景：
-        - 查询事实、定义、流程、政策、产品规格等
-        - 用户问"是什么"、"怎么做"、"多少钱"、"什么时候"等问题
-
-        Args:
-            query: 检索关键词或自然语言查询，应包含足够上下文（已替换代词）。
-
-        Returns:
-            带 [来源N] 编号的文档片段文本，可在最终回答中引用。
-        """
+        """从向量知识库中检索相关文档片段。"""
         logger.info("search_knowledge_base called: query=%s", query[:60])
         try:
             contexts, _ = rag_retriever.retrieve(query)
-            logger.info("search_knowledge_base: %d contexts", len(contexts))
         except Exception as e:
             logger.error("RAG search failed: %s", e, exc_info=True)
             return f"检索失败: {e}"
-
         if not contexts:
             return "知识库中未找到相关内容。"
-
-        # 收集 sources
         global _current_sources
         _current_sources = _current_sources + [
-            {
-                "chunk_id": ctx["id"],
-                "document_title": ctx.get("metadata", {}).get("document_title", ""),
-                "content": ctx["content"][:200],
-                "score": round(ctx.get("rerank_score", ctx.get("score", 0)), 4),
-                "type": "rag",
-            }
-            for ctx in contexts[:5]
+            {"chunk_id": ctx["id"], "document_title": ctx.get("metadata", {}).get("document_title", ""),
+             "content": ctx["content"][:200], "score": round(ctx.get("rerank_score", ctx.get("score", 0)), 4),
+             "type": "rag"}
+            for ctx in contexts[:5] if ctx.get("rerank_score", ctx.get("score", 0)) > 0
         ]
+        return "\n\n".join(f"[来源{i+1}] {ctx['content']}" for i, ctx in enumerate(contexts[:5]))
+    return [search_knowledge_base]
 
-        # 拼成 [来源N] 格式给 LLM
-        return "\n\n".join(
-            f"[来源{i+1}] {ctx['content']}"
-            for i, ctx in enumerate(contexts[:5])
-        )
+
+def build_kg_tools(graph_retriever):
+    """构建 KG deepagent tools（只含 search_knowledge_graph）。"""
+    logger.info("build_kg_tools: kg=%s", graph_retriever)
 
     @tool
     def search_knowledge_graph(query: str) -> str:
-        """从知识图谱中检索实体及其关系。
-
-        适用场景：
-        - 查询人物、组织、产品、项目之间的关系
-        - 多跳推理（如"A的负责人参与过哪些项目"）
-        - 实体归属（"X属于哪个部门"）
-
-        Args:
-            query: 应包含实体名（人名/组织名/产品名等）。
-
-        Returns:
-            实体关系描述文本，每行一条 "[实体] A --(关系)--> B" 格式。
-        """
+        """从知识图谱中检索实体及其关系。"""
         logger.info("search_knowledge_graph called: query=%s", query[:60])
         try:
-            contexts, kg_text, cypher_text = graph_retriever.retrieve(query)
-            logger.info("search_knowledge_graph: %d contexts, %d kg_text chars", len(contexts), len(kg_text or ""))
+            _, kg_text, cypher_text = graph_retriever.retrieve(query)
         except Exception as e:
             logger.error("KG search failed: %s", e, exc_info=True)
             return f"图谱检索失败: {e}"
-
-        if not contexts and not kg_text:
+        if not kg_text:
             return "知识图谱中未找到相关实体或关系。"
-
-        # 解析 kg_text 构建 minigraph
-        minigraph = _build_minigraph(kg_text, contexts)
+        minigraph = _build_minigraph(kg_text)
         global _current_sources, _current_kg_minigraph
         _current_kg_minigraph = minigraph
-
-        _current_sources = _current_sources + [
-            {
-                "chunk_id": str(contexts[0].get("chunk_id", "")) if contexts else "",
-                "document_title": "知识图谱",
-                "content": "\n".join(contexts[0].get("kg_paths", [])) if contexts else kg_text,
-                "score": min(contexts[0].get("kg_score", 1.0) / 2.0, 1.0) if contexts else 1.0,
-                "type": "kg",
-                "graph": minigraph,
-                "cypher": cypher_text,
-            }
-        ]
-
-        return f"知识图谱关系：\n{kg_text}\n\n相关文档片段：\n" + "\n\n".join(
-            f"[来源{i+1}] {ctx['content'][:300]}" for i, ctx in enumerate(contexts[:3])
-        )
-
-    return [search_knowledge_base, search_knowledge_graph]
+        _current_sources = _current_sources + [{
+            "chunk_id": "",
+            "document_title": "知识图谱",
+            "content": kg_text,
+            "score": 1.0,
+            "type": "kg", "graph": minigraph, "cypher": cypher_text,
+        }]
+        return f"知识图谱关系：\n{kg_text}"
+    return [search_knowledge_graph]
 
 
-def _build_minigraph(kg_text: str, contexts: list[dict]) -> dict:
+def build_tools(rag_retriever, graph_retriever, query_rewriter=None):
+    """（保留兼容）构建 deepagents tools，注入运行时依赖。"""
+    logger.info("build_tools: rag=%s kg=%s", rag_retriever, graph_retriever)
+    return build_rag_tools(rag_retriever) + build_kg_tools(graph_retriever)
+
+
+def _build_minigraph(kg_text: str) -> dict:
     """从 kg_text 解析迷你图谱数据。"""
     graph_nodes: dict[str, dict] = {}
     graph_edges: list[dict] = []
@@ -417,13 +380,6 @@ def _build_minigraph(kg_text: str, contexts: list[dict]) -> dict:
             )
             if not dup:
                 graph_edges.append({"source": source, "target": target, "type": rel_type})
-
-    # 从 [匹配] 路径补充节点
-    for ctx in contexts[:5]:
-        for path in ctx.get("kg_paths", []):
-            if path.startswith("[匹配] "):
-                name = path[5:].strip()
-                graph_nodes.setdefault(name, {"name": name, "type": "concept"})
 
     # 分配 ID
     node_id_map = {}

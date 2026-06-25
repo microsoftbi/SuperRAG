@@ -232,7 +232,7 @@ def get_document_chunks(
 ):
     """获取指定文档的分块内容。
 
-    向量存储的文档从 ChromaDB 查询分块；
+    向量存储的文档从 Milvus Lite 查询分块；
     图谱存储的文档从 SQLite chunks 表查询（全文一条）。
     """
     document = db.query(Document).filter(Document.id == document_id).first()
@@ -266,6 +266,37 @@ def get_document_chunks(
             logger.warning("SQLite chunk query failed for doc %d: %s", document_id, e)
 
     return {"document_id": document_id, "chunks": chunks}
+
+
+@router.post("/{document_id}/reprocess")
+def reprocess_document(
+    document_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """重新处理已失败的文档。"""
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # 重置状态并重新处理
+    from app.rag.document_processor import DocumentProcessor
+    document.status = DocumentStatus.PROCESSING.value
+    db.commit()
+
+    try:
+        doc_processor.process_document(document)
+
+        if document.store in ("graph", "both") and settings.enable_knowledge_graph:
+            _process_document_kg(document, db)
+
+        document.status = DocumentStatus.READY.value
+        db.commit()
+        return {"message": "reprocessed", "id": document.id}
+    except Exception as e:
+        document.status = DocumentStatus.FAILED.value
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/{document_id}/knowledge-bases")

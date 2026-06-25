@@ -11,24 +11,80 @@
         v-for="s in sessions"
         :key="s.session_id"
         :class="['session-item', { active: s.session_id === currentSessionId }]"
-        @click="$emit('select', s.session_id)"
       >
-        <div class="session-query">{{ s.first_query || '新对话' }}</div>
-        <div class="session-time">{{ formatTime(s.last_active) }}</div>
+        <div class="session-main" @click="$emit('select', s.session_id)">
+          <div class="session-query">{{ s.title || s.first_query || '新对话' }}</div>
+          <div class="session-time">{{ formatTime(s.last_active) }}</div>
+        </div>
+        <div class="session-actions">
+          <button
+            class="sess-btn rename-btn"
+            title="重命名"
+            @click.stop="startRename(s)"
+          >✏️</button>
+          <button
+            class="sess-btn del-btn"
+            title="删除"
+            @click.stop="$emit('delete', s.session_id)"
+          >🗑️</button>
+        </div>
       </div>
       <div v-if="sessions.length === 0" class="session-empty">暂无历史会话</div>
     </div>
+
+    <div v-if="!collapsed && renamingSession" class="rename-bar">
+      <input
+        v-model="renameText"
+        ref="renameInputRef"
+        @keydown.enter="confirmRename"
+        @keydown.esc="cancelRename"
+        placeholder="输入新名称..."
+      />
+      <button class="rename-ok" @click="confirmRename">✓</button>
+      <button class="rename-cancel" @click="cancelRename">✕</button>
+    </div>
+
     <button v-if="!collapsed" class="new-chat-btn" @click="$emit('new')">＋ 新对话</button>
   </div>
 </template>
 
 <script setup>
-defineProps({
+import { ref, nextTick } from 'vue'
+import { renameChatSession } from '../../api/index.js'
+
+const props = defineProps({
   sessions: { type: Array, default: () => [] },
   currentSessionId: { type: String, default: '' },
   collapsed: { type: Boolean, default: false },
 })
-defineEmits(['select', 'new', 'toggle'])
+const emit = defineEmits(['select', 'new', 'toggle', 'delete', 'rename'])
+
+const renamingSession = ref(null)
+const renameText = ref('')
+const renameInputRef = ref(null)
+
+function startRename(s) {
+  renamingSession.value = s.session_id
+  renameText.value = s.title || s.first_query || ''
+  nextTick(() => renameInputRef.value?.focus())
+}
+
+function cancelRename() {
+  renamingSession.value = null
+  renameText.value = ''
+}
+
+async function confirmRename() {
+  const title = renameText.value.trim()
+  if (!title) return
+  try {
+    await renameChatSession(renamingSession.value, title)
+    emit('rename', renamingSession.value, title)
+  } catch (e) {
+    alert('重命名失败')
+  }
+  cancelRename()
+}
 
 function formatTime(isoStr) {
   if (!isoStr) return ''
@@ -90,13 +146,42 @@ function formatTime(isoStr) {
   padding: 8px 0;
 }
 .session-item {
-  padding: 12px 16px;
+  display: flex; align-items: center;
+  padding: 8px 12px;
   cursor: pointer;
   border-bottom: 1px solid #f0f0f0;
   transition: background 0.15s;
 }
 .session-item:hover { background: #f0f0f0; }
 .session-item.active { background: #e3f2fd; }
+.session-main { flex: 1; min-width: 0; }
+.session-actions {
+  display: none; gap: 2px; flex-shrink: 0; margin-left: 4px;
+}
+.session-item:hover .session-actions { display: flex; }
+.session-item.active { background: #e3f2fd; }
+.sess-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 11px; padding: 2px 4px; border-radius: 3px; line-height: 1;
+}
+.sess-btn:hover { background: #e0e0e0; }
+.del-btn:hover { background: #ffcdd2; }
+.rename-bar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 8px 12px; border-top: 1px solid #e0e0e0;
+}
+.rename-bar input {
+  flex: 1; padding: 4px 8px; font-size: 13px;
+  border: 1px solid #1976d2; border-radius: 4px; outline: none;
+}
+.rename-ok, .rename-cancel {
+  background: none; border: 1px solid; border-radius: 4px;
+  cursor: pointer; font-size: 12px; padding: 3px 8px;
+}
+.rename-ok { color: #2e7d32; border-color: #2e7d32; }
+.rename-ok:hover { background: #e8f5e9; }
+.rename-cancel { color: #c62828; border-color: #c62828; }
+.rename-cancel:hover { background: #ffebee; }
 .session-query {
   font-size: 13px;
   color: #333;

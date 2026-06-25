@@ -48,6 +48,8 @@ def _run_migrations():
         # v0.5: add nl2sql_prompt and nl2sql_sql columns to conversation_logs
         "ALTER TABLE conversation_logs ADD COLUMN nl2sql_prompt TEXT",
         "ALTER TABLE conversation_logs ADD COLUMN nl2sql_sql TEXT",
+        # v0.6: add session_title to conversation_logs
+        "ALTER TABLE conversation_logs ADD COLUMN session_title VARCHAR(200)",
     ]
 
     from sqlalchemy import inspect

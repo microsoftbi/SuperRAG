@@ -9,7 +9,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-CONFIG_FILE = Path(settings.chroma_persist_dir).parent / "nl2sql_config.json"
+CONFIG_FILE = Path(settings.upload_dir).parent / "nl2sql_config.json"
 
 DEFAULT_CONFIG = {
     "connection": {

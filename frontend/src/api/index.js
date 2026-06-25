@@ -55,6 +55,10 @@ export function listDocuments(params) {
   return api.get('/documents', { params })
 }
 
+export function reprocessDocument(id) {
+  return api.post(`/documents/${id}/reprocess`)
+}
+
 export function listDocumentsWithKB(params) {
   return api.get('/documents', { params })
 }
@@ -86,6 +90,18 @@ export function getChatHistory(sessionId, mode = 'rag') {
 
 export function getChatSessions(mode = 'rag') {
   return api.get('/chat/sessions', { params: { mode } })
+}
+
+export function deleteChatSession(sessionId, mode = 'rag') {
+  return api.delete(`/chat/sessions/${sessionId}`, { params: { mode } })
+}
+
+export function renameChatSession(sessionId, title) {
+  return api.put(`/chat/sessions/${sessionId}`, { title })
+}
+
+export function getChatSessionTitle(sessionId) {
+  return api.get(`/chat/sessions/${sessionId}/title`)
 }
 
 // Logs
@@ -211,6 +227,14 @@ export function deleteEntity(entityId) {
 
 export function getEntityRelCount(entityId) {
   return api.get(`/knowledge-graph/entities/${entityId}/relationship-count`)
+}
+
+export function batchDeleteEntities(ids) {
+  return api.post('/knowledge-graph/entities/batch-delete', { ids })
+}
+
+export function batchDeleteRelationships(relationships) {
+  return api.post('/knowledge-graph/relationships/batch-delete', { relationships })
 }
 
 // ── NL2SQL ──

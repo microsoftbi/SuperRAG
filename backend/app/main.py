@@ -41,13 +41,29 @@ async def lifespan(app: FastAPI):
             entity_extractor = EntityExtractor(llm_service)
 
             knowledge_graph.init_kg_routes(neo4j_service, entity_extractor, documents.doc_processor)
-            await chat.init_chat_kg(neo4j_service, SessionLocal)
+            chat.init_chat_kg(neo4j_service)
             documents.init_documents_kg(neo4j_service, entity_extractor)
 
             print("✅ KG routes initialized")
         except Exception as e:
             print(f"⚠️  Neo4j initialization failed (KG will be disabled): {e}")
             neo4j_service = None
+
+    # ★ RAG Agent 初始化（不依赖 Neo4j）
+    try:
+        from app.agents.agent_factory import init_rag_agent, init_kg_agent
+        await init_rag_agent(chat.rag_retriever)
+        print("✅ RAG agent initialized")
+    except Exception as e:
+        print(f"⚠️  RAG agent initialization failed: {e}")
+
+    # ★ KG Agent 初始化（依赖 Neo4j）
+    if neo4j_service:
+        try:
+            await init_kg_agent(chat.graph_retriever)
+            print("✅ KG agent initialized")
+        except Exception as e:
+            print(f"⚠️  KG agent initialization failed: {e}")
 
     # ★ NL2SQL agent 初始化（独立于 KG）
     try:
@@ -57,6 +73,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️  NL2SQL agent initialization failed: {e}")
 
+    # ★ BM25 索引初始化（从已有数据重建）
+    try:
+        from app.rag.bm25_retriever import BM25Retriever
+        bm25 = BM25Retriever()
+        bm25.rebuild_index(vector_store=documents.vector_store)
+        if bm25.initialized:
+            print(f"✅ BM25 index rebuilt ({bm25.get_dim()} terms)")
+        else:
+            print("ℹ️  BM25 index not built (no documents yet)")
+    except Exception as e:
+        print(f"⚠️  BM25 initialization: {e}")
+
     yield
 
     # 清理
@@ -64,9 +92,8 @@ async def lifespan(app: FastAPI):
         neo4j_service.close()
         print("Neo4j connection closed")
 
-    from app.agents.agent_factory import close_agent, close_nl2sql_agent
-    await close_agent()
-    await close_nl2sql_agent()
+    from app.agents.agent_factory import close_agents
+    await close_agents()
 
 
 def _create_default_admin():

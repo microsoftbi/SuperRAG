@@ -17,6 +17,9 @@
       </select>
       <span class="count-hint">共 {{ filteredEdges.length }} / {{ graphData.edges.length }} 条关系</span>
       <div class="spacer" />
+      <button v-if="selectedEdges.size" class="btn-batch-delete" @click="$emit('batch-delete', [...selectedEdges])">
+        🗑️ 删除选中 ({{ selectedEdges.size }})
+      </button>
       <button @click="$emit('new')" class="btn-create">+ 新建关系</button>
     </div>
 
@@ -24,6 +27,9 @@
       <table>
         <thead>
           <tr>
+            <th class="col-cb">
+              <input type="checkbox" :checked="allSelected" @change="toggleAll" />
+            </th>
             <th class="col-idx">#</th>
             <th>源实体</th>
             <th class="col-type">关系类型</th>
@@ -32,7 +38,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(e, i) in pagedEdges" :key="i">
+          <tr v-for="(e, i) in pagedEdges" :key="i" :class="{ selected: selectedEdges.has(i) }">
+            <td class="col-cb">
+              <input type="checkbox" :checked="selectedEdges.has(i)" @change="toggleOne(i)" />
+            </td>
             <td class="col-idx">{{ (page - 1) * pageSize + i + 1 }}</td>
             <td class="col-name" :title="e.sourceName">{{ e.sourceName }}</td>
             <td class="col-type">
@@ -45,7 +54,7 @@
             </td>
           </tr>
           <tr v-if="!filteredEdges.length">
-            <td colspan="5" class="empty">没有符合条件的关系</td>
+            <td colspan="6" class="empty">没有符合条件的关系</td>
           </tr>
         </tbody>
       </table>
@@ -65,15 +74,35 @@ import { ref, computed, watch } from 'vue'
 const props = defineProps({
   graphData: { type: Object, required: true },
 })
-defineEmits(['new', 'edit', 'delete'])
+const emit = defineEmits(['new', 'edit', 'delete', 'batch-delete'])
 
 const searchSource = ref('')
 const searchTarget = ref('')
 const filterType = ref('')
 const page = ref(1)
 const pageSize = 30
+const selectedEdges = ref(new Set())
 
 // 把 edge 拼出 sourceName / targetName 方便筛选展示
+const allSelected = computed(() =>
+  pagedEdges.value.length > 0 && pagedEdges.value.every((_, i) => selectedEdges.value.has(i))
+)
+
+function toggleAll() {
+  if (allSelected.value) {
+    pagedEdges.value.forEach((_, i) => selectedEdges.value.delete(i))
+  } else {
+    pagedEdges.value.forEach((_, i) => selectedEdges.value.add(i))
+  }
+  selectedEdges.value = new Set(selectedEdges.value)
+}
+
+function toggleOne(idx) {
+  if (selectedEdges.value.has(idx)) selectedEdges.value.delete(idx)
+  else selectedEdges.value.add(idx)
+  selectedEdges.value = new Set(selectedEdges.value)
+}
+
 const enrichedEdges = computed(() => {
   const nodeMap = {}
   props.graphData.nodes.forEach(n => { nodeMap[n.id] = n.name })
@@ -108,7 +137,7 @@ const pagedEdges = computed(() => {
   return filteredEdges.value.slice(start, start + pageSize)
 })
 
-watch([searchSource, searchTarget, filterType], () => { page.value = 1 })
+watch([searchSource, searchTarget, filterType], () => { selectedEdges.value = new Set(); page.value = 1 })
 </script>
 
 <style scoped>
@@ -130,6 +159,11 @@ watch([searchSource, searchTarget, filterType], () => { page.value = 1 })
   border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
 }
 .btn-create:hover { background: #1565c0; }
+.btn-batch-delete {
+  padding: 6px 12px; background: #c62828; color: #fff;
+  border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
+}
+.btn-batch-delete:hover { background: #b71c1c; }
 .table-scroll {
   flex: 1; min-height: 0; max-height: 600px; overflow: auto;
   border: 1px solid #dde0e4; border-radius: 8px;
@@ -146,6 +180,7 @@ td {
 tbody tr:nth-child(even) td { background: #f8f9fb; }
 tbody tr:hover td { background: #e3f0fa; }
 .col-idx { width: 50px; color: #aaa; text-align: center; }
+.col-cb { width: 32px; text-align: center; }
 .col-type { width: 160px; }
 .col-actions { width: 100px; text-align: right; white-space: nowrap; }
 .col-name {

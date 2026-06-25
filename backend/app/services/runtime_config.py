@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.config import settings
 
-CONFIG_FILE = Path(settings.chroma_persist_dir).parent / "runtime_config.json"
+CONFIG_FILE = Path(settings.upload_dir).parent / "runtime_config.json"
 
 DEFAULT_CONFIG = {
     "retriever_top_k": settings.retriever_top_k,

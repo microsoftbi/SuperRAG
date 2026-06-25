@@ -79,6 +79,10 @@ async function send() {
   messages.value.push({ role: 'user', content: query })
   input.value = ''
   loading.value = true
+  // 用户发送后立即滚动到底部
+  nextTick().then(() => {
+    messagesRef.value?.scrollTo({ top: messagesRef.value.scrollHeight, behavior: 'smooth' })
+  })
   messages.value.push({ role: 'assistant', content: '', sources: [] })
 
   try {
@@ -102,6 +106,10 @@ async function send() {
           const parsed = JSON.parse(data)
           if (parsed.type === 'token') {
             messages.value[messages.value.length - 1].content += parsed.content
+            // 流式生成时跟随滚动
+            nextTick().then(() => {
+              messagesRef.value?.scrollTo({ top: messagesRef.value.scrollHeight, behavior: 'smooth' })
+            })
           } else if (parsed.type === 'sources') {
             messages.value[messages.value.length - 1].sources = parsed.sources
             // 提取 sources 中的 resultData / chart spec

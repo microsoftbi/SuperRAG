@@ -25,6 +25,7 @@ class ConversationLog(Base):
     model: Mapped[str] = mapped_column(String(100), default="")
     nl2sql_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     nl2sql_sql: Mapped[str | None] = mapped_column(Text, nullable=True)
+    session_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
     )

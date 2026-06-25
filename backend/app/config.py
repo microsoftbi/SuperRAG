@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     volc_endpoint: str = "ark.cn-beijing.volces.com"
     llm_model_name: str = ""
     embedding_model_name: str = ""
-    chroma_persist_dir: str = "./chroma_db"
+    embedding_dim: int = 2048
+    milvus_lite_uri: str = "./milvus_lite.db"
     database_url: str = "sqlite:///./sprag.db"
     upload_dir: str = "./uploads"
 
@@ -45,5 +46,4 @@ settings = Settings()
 
 
 def ensure_dirs() -> None:
-    Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)

@@ -9,8 +9,13 @@
       </div>
     </header>
     <nav class="mode-tabs">
-      <button :class="['mode-tab', { active: chatMode === 'rag' }]" @click="chatMode = 'rag'">RAG + 图谱</button>
-      <button :class="['mode-tab', { active: chatMode === 'nl2sql' }]" @click="chatMode = 'nl2sql'">问数 (NL2SQL)</button>
+      <button :class="['mode-tab', { active: chatMode === 'rag' }]" @click="chatMode = 'rag'">RAG</button>
+      <button
+        :class="['mode-tab', { active: chatMode === 'kg', disabled: !kgAvailable }]"
+        :disabled="!kgAvailable"
+        @click="chatMode = 'kg'"
+      >知识图谱</button>
+      <button :class="['mode-tab', { active: chatMode === 'nl2sql' }]" @click="chatMode = 'nl2sql'">问数</button>
     </nav>
     <div class="chat-body">
       <SessionSidebar
@@ -19,9 +24,12 @@
         :collapsed="sidebarCollapsed"
         @select="switchSession"
         @new="startNewSession"
+        @delete="handleDeleteSession"
+        @rename="handleRenameSession"
         @toggle="sidebarCollapsed = !sidebarCollapsed; localStorage.setItem('sidebar_collapsed', sidebarCollapsed)"
       />
-      <ChatWindow v-if="chatMode === 'rag'" :session-key="currentSessionId" />
+      <ChatWindow v-if="chatMode === 'rag'" mode="rag" :session-key="currentSessionId" />
+      <ChatWindow v-if="chatMode === 'kg'" mode="kg" :session-key="currentSessionId" />
       <Nl2SqlChat v-if="chatMode === 'nl2sql'" :session-key="currentSessionId" />
     </div>
   </div>
@@ -33,7 +41,7 @@ import { useRouter } from 'vue-router'
 import ChatWindow from '../components/chat/ChatWindow.vue'
 import Nl2SqlChat from '../components/chat/Nl2SqlChat.vue'
 import SessionSidebar from '../components/chat/SessionSidebar.vue'
-import { getChatSessions } from '../api/index.js'
+import { getChatSessions, deleteChatSession } from '../api/index.js'
 
 const router = useRouter()
 
@@ -47,18 +55,22 @@ const chatMode = ref(localStorage.getItem('chat_mode') || 'rag')
 const sessions = ref([])
 const currentSessionId = ref('')
 const sidebarCollapsed = ref(localStorage.getItem('sidebar_collapsed') === 'true')
+const kgAvailable = ref(true)  // 由后端返回，Neo4j 不可用时置 false
+
+const sessionIdKeys = { rag: 'chat_session_id', kg: 'kg_session_id', nl2sql: 'nl2sql_session_id' }
+const sessionIdPrefixes = { rag: 'session_', kg: 'kg_', nl2sql: 'nl2sql_' }
 
 // 初始化 sessionId
 function initSessionId() {
-  const key = chatMode.value === 'rag' ? 'chat_session_id' : 'nl2sql_session_id'
+  const key = sessionIdKeys[chatMode.value] || 'chat_session_id'
   const stored = localStorage.getItem(key)
-  const prefix = chatMode.value === 'rag' ? 'session_' : 'nl2sql_'
+  const prefix = sessionIdPrefixes[chatMode.value] || 'session_'
   currentSessionId.value = stored || prefix + Date.now()
 }
 
 async function loadSessions() {
   localStorage.setItem('chat_mode', chatMode.value)
-  const key = chatMode.value === 'rag' ? 'chat_session_id' : 'nl2sql_session_id'
+  const key = sessionIdKeys[chatMode.value] || 'chat_session_id'
   localStorage.setItem(key, currentSessionId.value)
   try {
     const res = await getChatSessions(chatMode.value)
@@ -80,14 +92,32 @@ watch(chatMode, async () => {
 
 function switchSession(sessionId) {
   currentSessionId.value = sessionId
-  const key = chatMode.value === 'rag' ? 'chat_session_id' : 'nl2sql_session_id'
+  const key = sessionIdKeys[chatMode.value] || 'chat_session_id'
   localStorage.setItem(key, sessionId)
 }
 
+async function handleDeleteSession(sessionId) {
+  if (!confirm(`确定删除此会话以及所有相关日志？`)) return
+  try {
+    await deleteChatSession(sessionId, chatMode.value)
+    if (currentSessionId.value === sessionId) {
+      startNewSession()
+    }
+    await loadSessions()
+  } catch (e) {
+    alert('删除失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+function handleRenameSession(sessionId, title) {
+  const s = sessions.value.find(x => x.session_id === sessionId)
+  if (s) s.title = title
+}
+
 function startNewSession() {
-  const prefix = chatMode.value === 'rag' ? 'session_' : 'nl2sql_'
+  const prefix = sessionIdPrefixes[chatMode.value] || 'session_'
   currentSessionId.value = prefix + Date.now()
-  const key = chatMode.value === 'rag' ? 'chat_session_id' : 'nl2sql_session_id'
+  const key = sessionIdKeys[chatMode.value] || 'chat_session_id'
   localStorage.setItem(key, currentSessionId.value)
 }
 
@@ -138,5 +168,6 @@ function logout() {
   border-bottom: 2px solid transparent; margin-bottom: -2px;
 }
 .mode-tab.active { color: #1976d2; border-bottom-color: #1976d2; font-weight: 600; }
-.mode-tab:hover:not(.active) { color: #333; }
+.mode-tab:hover:not(.active):not(.disabled) { color: #333; }
+.mode-tab.disabled { color: #ccc; cursor: not-allowed; }
 </style>

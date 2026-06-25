@@ -58,6 +58,7 @@
               <td>{{ new Date(doc.created_at).toLocaleString() }}</td>
               <td class="actions">
                 <button v-if="docFilter === 'vector' || doc.store === 'both'" @click="viewChunks(doc)" class="chunk-btn">查看分块</button>
+                <button v-if="doc.status === 'failed'" @click="retry(doc.id)" class="retry-btn">重试</button>
                 <button @click="remove(doc.id)" class="delete-btn">删除</button>
               </td>
             </tr>
@@ -97,7 +98,7 @@ import UserManager from '../components/admin/UserManager.vue'
 import KnowledgeGraphViewer from '../components/admin/KnowledgeGraphViewer.vue'
 import DocumentChunkViewer from '../components/admin/DocumentChunkViewer.vue'
 import Nl2SqlPanel from '../components/admin/Nl2SqlPanel.vue'
-import { listDocuments, deleteDocument, listKnowledgeBases } from '../api/index.js'
+import { listDocuments, deleteDocument, reprocessDocument, listKnowledgeBases } from '../api/index.js'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -155,6 +156,15 @@ async function remove(id) {
   await loadDocuments()
 }
 
+async function retry(id) {
+  try {
+    await reprocessDocument(id)
+    await loadDocuments()
+  } catch (e) {
+    alert('重试失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
 onMounted(loadDocuments)
 </script>
 
@@ -187,6 +197,8 @@ th { background: #f5f5f5; font-weight: 600; }
 .status.pending { background: #f5f5f5; color: #666; }
 .actions { white-space: nowrap; }
 .delete-btn { padding: 4px 10px; background: #ef5350; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px; }
+.retry-btn { padding: 4px 10px; background: #ff9800; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px; }
+.retry-btn:hover { background: #f57c00; }
 .chunk-btn { padding: 4px 10px; background: #1976d2; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
 .chunk-btn:hover { background: #1565c0; }
 .empty { text-align: center; color: #999; padding: 24px; }
