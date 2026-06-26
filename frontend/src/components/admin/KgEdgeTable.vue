@@ -45,7 +45,7 @@
             <td class="col-idx">{{ (page - 1) * pageSize + i + 1 }}</td>
             <td class="col-name" :title="e.sourceName">{{ e.sourceName }}</td>
             <td class="col-type">
-              <span class="rel-tag">{{ e.type }}</span>
+              <span class="rel-tag" :style="{ background: relColorMap[e.type] || '#5e35b1' }">{{ e.type }}</span>
             </td>
             <td class="col-name" :title="e.targetName">{{ e.targetName }}</td>
             <td class="col-actions">
@@ -69,7 +69,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { getRelationTypes } from '../../api/index.js'
 
 const props = defineProps({
   graphData: { type: Object, required: true },
@@ -82,6 +83,22 @@ const filterType = ref('')
 const page = ref(1)
 const pageSize = 30
 const selectedEdges = ref(new Set())
+const relColorMap = ref({})
+
+async function loadRelColors() {
+  try {
+    const res = await getRelationTypes()
+    const map = {}
+    for (const t of (res.data || [])) {
+      map[t.name] = t.color || '#5e35b1'
+    }
+    relColorMap.value = map
+  } catch {
+    relColorMap.value = {}
+  }
+}
+
+onMounted(loadRelColors)
 
 // 把 edge 拼出 sourceName / targetName 方便筛选展示
 const allSelected = computed(() =>
@@ -146,21 +163,21 @@ watch([searchSource, searchTarget, filterType], () => { selectedEdges.value = ne
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 .search-input {
-  padding: 6px 10px; border: 1px solid #d0d0d0; border-radius: 4px;
+  padding: 6px 10px; border: 1px solid var(--border-input); border-radius: 4px;
   font-size: 13px; min-width: 140px;
 }
 .type-filter {
-  padding: 6px 8px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 13px;
+  padding: 6px 8px; border: 1px solid var(--border-input); border-radius: 4px; font-size: 13px;
 }
-.count-hint { font-size: 12px; color: #999; }
+.count-hint { font-size: 12px; color: var(--text-tertiary); }
 .spacer { flex: 1; }
 .btn-create {
-  padding: 6px 12px; background: #1976d2; color: #fff;
+  padding: 6px 12px; background: var(--color-primary); color: var(--text-inverse);
   border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
 }
-.btn-create:hover { background: #1565c0; }
+.btn-create:hover { background: var(--color-primary-hover); }
 .btn-batch-delete {
-  padding: 6px 12px; background: #c62828; color: #fff;
+  padding: 6px 12px; background: #c62828; color: var(--text-inverse);
   border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
 }
 .btn-batch-delete:hover { background: #b71c1c; }
@@ -171,11 +188,11 @@ watch([searchSource, searchTarget, filterType], () => { selectedEdges.value = ne
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 thead { position: sticky; top: 0; z-index: 1; background: #eef1f5; }
 th {
-  font-weight: 600; color: #333; padding: 10px;
+  font-weight: 600; color: var(--text-primary); padding: 10px;
   border-bottom: 2px solid #d0d4db; text-align: left; font-size: 12px;
 }
 td {
-  padding: 8px 10px; border-bottom: 1px solid #eef0f3; color: #444;
+  padding: 8px 10px; border-bottom: 1px solid var(--border-light); color: var(--text-primary);
 }
 tbody tr:nth-child(even) td { background: #f8f9fb; }
 tbody tr:hover td { background: #e3f0fa; }
@@ -189,24 +206,24 @@ tbody tr:hover td { background: #e3f0fa; }
 }
 .rel-tag {
   display: inline-block; padding: 2px 8px; border-radius: 3px;
-  font-size: 11px; color: #fff; background: #5e35b1;
+  font-size: 11px; color: var(--text-inverse); background: #5e35b1;
 }
 .icon-btn {
   background: none; border: 1px solid; border-radius: 4px;
   cursor: pointer; padding: 3px 6px; margin-left: 4px; font-size: 12px;
 }
 .icon-btn.edit { color: #43a047; border-color: #43a047; }
-.icon-btn.edit:hover { background: #e8f5e9; }
-.icon-btn.delete { color: #c62828; border-color: #c62828; }
-.icon-btn.delete:hover { background: #ffebee; }
-.empty { text-align: center; color: #999; padding: 40px; }
+.icon-btn.edit:hover { background: var(--color-success-light); }
+.icon-btn.delete { color: var(--color-danger); border-color: var(--color-danger); }
+.icon-btn.delete:hover { background: var(--color-danger-light); }
+.empty { text-align: center; color: var(--text-tertiary); padding: 40px; }
 .pager {
   display: flex; align-items: center; justify-content: center; gap: 12px;
-  font-size: 13px; color: #666;
+  font-size: 13px; color: var(--text-secondary);
 }
 .pager button {
-  padding: 4px 10px; border: 1px solid #d0d0d0;
-  background: #fff; border-radius: 4px; cursor: pointer;
+  padding: 4px 10px; border: 1px solid var(--border-input);
+  background: var(--bg-card); border-radius: 4px; cursor: pointer;
 }
-.pager button:disabled { color: #ccc; cursor: not-allowed; }
+.pager button:disabled { color: var(--text-muted); cursor: not-allowed; }
 </style>

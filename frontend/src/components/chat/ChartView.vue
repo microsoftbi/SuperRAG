@@ -45,10 +45,17 @@ const currentType = ref(props.spec.type || 'bar')
 const isFullscreen = ref(false)
 let chartInstance = null
 
+function getChartColors() {
+  const val = getComputedStyle(document.documentElement)
+    .getPropertyValue('--chart-colors').trim()
+  if (val) return val.split(',').map(c => c.trim())
+  return ['#1976d2', '#26a69a', '#ef6c00', '#ab47bc', '#5e35b1', '#00897b', '#d81b60', '#43a047']
+}
+
 function buildOption(type) {
   const { x, y, data, title } = props.spec
   const xData = data.map(r => String(r[x] ?? ''))
-  const colors = ['#1976d2', '#26a69a', '#ef6c00', '#ab47bc', '#5e35b1', '#00897b', '#d81b60', '#43a047']
+  const colors = getChartColors()
 
   if (type === 'pie') {
     const yField = y[0]
@@ -121,7 +128,9 @@ function render() {
 
 function exportPng() {
   if (!chartInstance) return
-  const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' })
+  const bg = getComputedStyle(document.documentElement)
+    .getPropertyValue('--bg-card').trim() || '#fff'
+  const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: bg })
   const a = document.createElement('a')
   a.href = url
   a.download = `${props.spec.title || 'chart'}.png`
@@ -154,39 +163,44 @@ watch(() => props.spec, () => {
   currentType.value = props.spec.type || 'bar'
   nextTick(render)
 }, { deep: true })
+
+// Re-render on theme change
+import { useTheme } from '../../composables/useTheme.js'
+const { isDark } = useTheme()
+watch(isDark, () => nextTick(render))
 </script>
 
 <style scoped>
 .chart-view {
   margin-top: 12px;
-  border: 1px solid #dde0e4;
+  border: 1px solid var(--code-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--bg-card);
   overflow: hidden;
 }
 .chart-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 12px;
-  background: #f6f8fa;
-  border-bottom: 1px solid #eef0f3;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--border-light);
 }
-.chart-title { font-size: 13px; font-weight: 600; color: #333; }
+.chart-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .chart-actions { display: flex; gap: 6px; align-items: center; }
 .type-select {
   font-size: 12px; padding: 3px 6px;
-  border: 1px solid #d0d4db; border-radius: 4px;
-  background: #fff; cursor: pointer;
+  border: 1px solid var(--border-input); border-radius: 4px;
+  background: var(--bg-card); cursor: pointer;
 }
 .icon-btn {
-  font-size: 11px; color: #1976d2; background: #fff;
-  border: 1px solid #1976d2; border-radius: 4px;
+  font-size: 11px; color: var(--color-primary); background: var(--bg-card);
+  border: 1px solid var(--color-primary); border-radius: 4px;
   padding: 3px 8px; cursor: pointer; line-height: 1.4;
 }
-.icon-btn:hover { background: #e3f2fd; }
+.icon-btn:hover { background: var(--bg-active); }
 .chart-canvas { width: 100%; height: 340px; padding: 4px; }
 .chart-canvas.fullscreen {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   width: 100vw; height: 100vh; z-index: 9999;
-  background: #fff; padding: 20px;
+  background: var(--bg-card); padding: 20px;
 }
 </style>

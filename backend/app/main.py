@@ -37,6 +37,9 @@ async def lifespan(app: FastAPI):
             neo4j_service.initialize()
             print("✅ Neo4j connected and initialized")
 
+            # ── 种子类型数据：首次运行自动写入 ──
+            _seed_default_types()
+
             # 注入 KG 依赖到各模块
             entity_extractor = EntityExtractor(llm_service)
 
@@ -116,7 +119,46 @@ def _create_default_admin():
         db.close()
 
 
-app = FastAPI(title="SPRAG - Customer Service RAG", version="0.1.0", lifespan=lifespan)
+def _seed_default_types():
+    """首次运行时写入默认的节点类型和关系类型。"""
+    from app.models.kg_type import NodeType, RelationshipType
+
+    db: Session = SessionLocal()
+    try:
+        # 没有种子数据才写入
+        if db.query(NodeType).count() > 0:
+            return
+
+        defaults = [
+            NodeType(name="person", label="人物", color="#e91e63", description="个人实体"),
+            NodeType(name="org", label="组织", color="#2196f3", description="公司/机构/团队"),
+            NodeType(name="product", label="产品/项目", color="#4caf50", description="产品、服务或项目"),
+            NodeType(name="concept", label="概念", color="#ff9800", description="抽象概念、术语、主题"),
+            NodeType(name="location", label="地点", color="#9c27b0", description="地理位置/场所"),
+        ]
+        for nt in defaults:
+            db.add(nt)
+
+        rel_defaults = [
+            RelationshipType(name="works_at", label="工作于", color="#5e35b1", description="人员与组织之间的雇佣关系"),
+            RelationshipType(name="belongs_to", label="属于", color="#00897b", description="从属关系"),
+            RelationshipType(name="related_to", label="相关", color="#607d8b", description="一般性关联"),
+            RelationshipType(name="located_in", label="位于", color="#7cb342", description="位置关系"),
+            RelationshipType(name="produces", label="生产/产出", color="#c0ca33", description="生产/创造关系"),
+        ]
+        for rt in rel_defaults:
+            db.add(rt)
+
+        db.commit()
+        print(f"✅ 默认类型已创建: {len(defaults)} 节点类型, {len(rel_defaults)} 关系类型")
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ 种子类型创建失败: {e}")
+    finally:
+        db.close()
+
+
+app = FastAPI(title="SuperRAG - Customer Service RAG", version=settings.app_version, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

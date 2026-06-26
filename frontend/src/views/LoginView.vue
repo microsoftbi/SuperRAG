@@ -1,7 +1,7 @@
 <template>
   <div class="auth-page">
     <div class="auth-card">
-      <h1>SPRAG 客服助手</h1>
+      <h1>SuperRAG 客服助手</h1>
       <h2>登录</h2>
       <form @submit.prevent="handleLogin">
         <div class="field">
@@ -56,25 +56,26 @@ async function handleLogin() {
 <style scoped>
 .auth-page {
   display: flex; align-items: center; justify-content: center;
-  min-height: 100vh; background: #f5f5f5;
+  min-height: 100vh; background: var(--bg-page);
 }
 .auth-card {
-  background: #fff; padding: 40px; border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08); width: 360px;
+  background: var(--bg-card); padding: 40px; border-radius: 12px;
+  box-shadow: var(--shadow-sm); width: 360px;
 }
-h1 { font-size: 20px; text-align: center; color: #1976d2; margin-bottom: 4px; }
-h2 { font-size: 16px; text-align: center; color: #666; margin-bottom: 24px; }
+h1 { font-size: 20px; text-align: center; color: var(--color-primary); margin-bottom: 4px; }
+h2 { font-size: 16px; text-align: center; color: var(--text-secondary); margin-bottom: 24px; }
 .field { margin-bottom: 12px; }
 .field input {
-  width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0;
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border-input);
   border-radius: 6px; font-size: 14px; box-sizing: border-box;
+  background: var(--bg-card); color: var(--text-primary);
 }
 .btn {
-  width: 100%; padding: 10px; background: #1976d2; color: #fff;
+  width: 100%; padding: 10px; background: var(--color-primary); color: var(--text-inverse);
   border: none; border-radius: 6px; font-size: 14px; cursor: pointer;
 }
-.btn:disabled { background: #ccc; }
-.error { color: #c62828; font-size: 13px; margin-bottom: 8px; }
-.switch { text-align: center; font-size: 13px; color: #888; margin-top: 16px; }
-.switch a { color: #1976d2; text-decoration: none; }
+.btn:disabled { background: var(--text-muted); }
+.error { color: var(--color-danger); font-size: 13px; margin-bottom: 8px; }
+.switch { text-align: center; font-size: 13px; color: var(--text-tertiary); margin-top: 16px; }
+.switch a { color: var(--color-primary); text-decoration: none; }
 </style>

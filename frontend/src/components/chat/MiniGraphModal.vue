@@ -37,7 +37,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Network } from 'vis-network'
 import { DataSet } from 'vis-data'
 import { getGraph } from '../../api/index.js'
@@ -61,10 +61,33 @@ const depthHint = computed(() => {
   return `从回答实体出发，展开 ${depthLevel.value - 1} 跳关联`
 })
 
-const typeColors = {
-  person: '#e91e63', org: '#2196f3', product: '#4caf50',
-  concept: '#ff9800', location: '#9c27b0',
+const getCSSVar = (name, fallback) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+
+const registeredTypes = ref({})
+
+async function loadRegisteredTypes() {
+  try {
+    const { getNodeTypes } = await import('../../api/index.js')
+    const res = await getNodeTypes()
+    const map = {}
+    for (const t of (res.data || [])) {
+      map[t.name] = {
+        color: t.color || getCSSVar('--graph-type-default', '#607d8b'),
+        label: t.label || t.name,
+      }
+    }
+    registeredTypes.value = map
+  } catch {
+    // fallback
+  }
 }
+
+const typeColors = computed(() =>
+  Object.fromEntries(
+    Object.entries(registeredTypes.value).map(([k, v]) => [k, v.color])
+  )
+)
 
 // 从 graphData 提取种子实体名
 function extractSeeds(gd) {
@@ -170,15 +193,25 @@ function renderGraph(nodes, edges) {
     if (seedNames.includes(n.name)) seedIdSet.add(n.id)
   }
 
+  const nodeFontColor = getCSSVar('--graph-node-font', '#444')
+  const edgeColor = getCSSVar('--graph-edge-color', '#ccc')
+  const edgeFontColor = getCSSVar('--graph-edge-font', '#888')
+  const highlightColor = getCSSVar('--graph-highlight', '#409eff')
+  const nodeBorder = getCSSVar('--graph-node-border', '#fff')
+  const graphBg = getCSSVar('--graph-bg', '#fafafa')
+  const graphTypeDefault = getCSSVar('--graph-type-default', '#409eff')
+  const tc = typeColors.value
+
   const visNodes = new DataSet(nodes.map(n => ({
     id: n.id,
     label: n.name,
-    color: seedIdSet.has(n.id) ? '#FF6B6B' : (typeColors[n.type] || '#409EFF'),
+    color: seedIdSet.has(n.id) ? '#FF6B6B' : (tc[n.type] || graphTypeDefault),
     title: `类型: ${n.type}`,
     shape: 'dot',
     size: seedIdSet.has(n.id) ? 26 : 22,
-    font: { size: 13 },
+    font: { size: 13, color: nodeFontColor },
     borderWidth: 2,
+    borderColor: nodeBorder,
     shadow: true,
   })))
 
@@ -189,8 +222,8 @@ function renderGraph(nodes, edges) {
     label: e.type,
     arrows: { to: { enabled: true, scaleFactor: 0.7 } },
     smooth: { type: 'continuous' },
-    font: { size: 11, color: '#888' },
-    color: { color: '#ccc', highlight: '#409EFF' },
+    font: { size: 11, color: edgeFontColor },
+    color: { color: edgeColor, highlight: highlightColor },
     width: 1.5,
   })))
 
@@ -227,6 +260,7 @@ watch(() => props.visible, async (val) => {
   if (val) {
     seedNodeNames.value = extractSeeds(props.graphData)
     depthLevel.value = 1
+    await loadRegisteredTypes()
     await nextTick()
     renderDirectGraph()
   } else if (network) {
@@ -234,6 +268,8 @@ watch(() => props.visible, async (val) => {
     network = null
   }
 })
+
+onMounted(loadRegisteredTypes)
 
 onUnmounted(() => {
   if (network) { network.destroy(); network = null }
@@ -244,35 +280,35 @@ onUnmounted(() => {
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.4);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
 }
 .modal {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 10px;
   width: 800px;
   max-width: 92vw;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  box-shadow: var(--shadow-lg);
 }
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 14px 18px;
-  border-bottom: 1px solid #e0e0e0;
-  background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
-  color: #fff;
+  border-bottom: 1px solid var(--border-default);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+  color: var(--text-inverse);
   border-radius: 10px 10px 0 0;
 }
 .modal-header h3 { margin: 0; font-size: 16px; }
 .close-btn {
   background: rgba(255,255,255,0.2);
-  border: none; color: #fff; font-size: 20px; cursor: pointer;
+  border: none; color: var(--text-inverse); font-size: 20px; cursor: pointer;
   width: 32px; height: 32px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   transition: background 0.2s;
@@ -281,25 +317,25 @@ onUnmounted(() => {
 .modal-body { padding: 16px 18px; }
 .depth-control {
   display: flex; flex-direction: column; gap: 4px;
-  background: #f5f5f5; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px;
+  background: var(--bg-page); padding: 12px 16px; border-radius: 8px; margin-bottom: 12px;
 }
-.depth-control label { font-weight: 500; font-size: 13px; color: #555; }
-.depth-hint { font-size: 11px; color: #999; }
+.depth-control label { font-weight: 500; font-size: 13px; color: var(--text-secondary); }
+.depth-hint { font-size: 11px; color: var(--text-tertiary); }
 .depth-slider {
   width: 100%; height: 5px;
   -webkit-appearance: none; appearance: none;
-  background: linear-gradient(90deg, #1976d2, #42a5f5);
+  background: linear-gradient(90deg, var(--color-primary), #42a5f5);
   border-radius: 3px; cursor: pointer; outline: none;
 }
 .depth-slider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 18px; height: 18px;
-  background: #fff; border: 2px solid #1976d2; border-radius: 50%; cursor: pointer;
+  background: var(--bg-card); border: 2px solid var(--color-primary); border-radius: 50%; cursor: pointer;
 }
-.depth-labels { display: flex; justify-content: space-between; font-size: 10px; color: #999; padding: 0 2px; }
-.graph-canvas { width: 100%; height: 480px; border: 1px solid #eee; border-radius: 6px; }
+.depth-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-tertiary); padding: 0 2px; }
+.graph-canvas { width: 100%; height: 480px; border: 1px solid var(--border-light); border-radius: 6px; }
 .stats {
   display: flex; justify-content: flex-end; gap: 16px; margin-top: 8px;
-  font-size: 13px; color: #888;
+  font-size: 13px; color: var(--text-tertiary);
 }
-.stats span { background: #f5f5f5; padding: 3px 10px; border-radius: 10px; }
+.stats span { background: var(--bg-page); padding: 3px 10px; border-radius: 10px; }
 </style>

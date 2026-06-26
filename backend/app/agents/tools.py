@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 _current_sources: list[dict] = []
 _current_kg_minigraph: dict | None = None
 _current_thread_id: str | None = None
+_current_retrieval_detail: dict | None = None
 
 # 按 thread_id 缓存上一次 query_database 的完整结果数据，供 make_chart 复用
 # 简易 LRU：超过 _THREAD_CACHE_MAX 时按插入顺序淘汰
@@ -27,10 +28,11 @@ _thread_last_data: dict[str, dict] = {}
 
 def reset_tool_state(thread_id: str | None = None):
     """每次 chat 请求开始时调用，重置收集状态并绑定当前 thread_id。"""
-    global _current_sources, _current_kg_minigraph, _current_thread_id
+    global _current_sources, _current_kg_minigraph, _current_thread_id, _current_retrieval_detail
     _current_sources = []
     _current_kg_minigraph = None
     _current_thread_id = thread_id
+    _current_retrieval_detail = None
 
 
 def get_collected_sources() -> list[dict]:
@@ -39,6 +41,17 @@ def get_collected_sources() -> list[dict]:
 
 def get_collected_kg_minigraph() -> dict | None:
     return _current_kg_minigraph
+
+
+def get_retrieval_detail() -> dict | None:
+    return _current_retrieval_detail
+
+
+def cache_retrieval_detail(detail: dict | None):
+    """供 chat.py fallback 路径设置 retrieval_detail。"""
+    global _current_retrieval_detail
+    if detail:
+        _current_retrieval_detail = detail
 
 
 def _cache_thread_data(thread_id: str | None, data: list[dict], columns: list[dict]) -> None:
@@ -303,13 +316,14 @@ def build_rag_tools(rag_retriever):
         """从向量知识库中检索相关文档片段。"""
         logger.info("search_knowledge_base called: query=%s", query[:60])
         try:
-            contexts, _ = rag_retriever.retrieve(query)
+            contexts, _, detail = rag_retriever.retrieve_detail(query)
         except Exception as e:
             logger.error("RAG search failed: %s", e, exc_info=True)
             return f"检索失败: {e}"
         if not contexts:
             return "知识库中未找到相关内容。"
-        global _current_sources
+        global _current_sources, _current_retrieval_detail
+        _current_retrieval_detail = detail
         _current_sources = _current_sources + [
             {"chunk_id": ctx["id"], "document_title": ctx.get("metadata", {}).get("document_title", ""),
              "content": ctx["content"][:200], "score": round(ctx.get("rerank_score", ctx.get("score", 0)), 4),

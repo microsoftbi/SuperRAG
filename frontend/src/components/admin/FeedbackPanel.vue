@@ -57,19 +57,19 @@ onMounted(load)
 .feedback-panel h2 { font-size: 16px; margin-bottom: 16px; }
 .stats-cards { display: flex; gap: 12px; margin-bottom: 20px; }
 .stat-card {
-  flex: 1; padding: 16px; border: 1px solid #e0e0e0; border-radius: 8px; text-align: center;
+  flex: 1; padding: 16px; border: 1px solid var(--border-default); border-radius: 8px; text-align: center;
 }
-.stat-value { font-size: 24px; font-weight: bold; color: #333; }
-.stat-label { font-size: 12px; color: #888; margin-top: 4px; }
-.stat-card.like .stat-value { color: #2e7d32; }
-.stat-card.dislike .stat-value { color: #c62828; }
-.empty { text-align: center; color: #999; padding: 40px; }
+.stat-value { font-size: 24px; font-weight: bold; color: var(--text-primary); }
+.stat-label { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
+.stat-card.like .stat-value { color: var(--color-success); }
+.stat-card.dislike .stat-value { color: var(--color-danger); }
+.empty { text-align: center; color: var(--text-tertiary); padding: 40px; }
 .feedback-item {
-  padding: 12px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 8px;
+  padding: 12px; border: 1px solid var(--border-default); border-radius: 6px; margin-bottom: 8px;
 }
 .fb-meta { display: flex; gap: 12px; align-items: center; margin-bottom: 4px; }
 .fb-rating { font-size: 18px; }
-.fb-time { font-size: 12px; color: #888; }
+.fb-time { font-size: 12px; color: var(--text-tertiary); }
 .fb-session { font-size: 12px; color: #aaa; font-family: monospace; }
-.fb-suggestion { font-size: 13px; color: #555; padding: 8px; background: #f9f9f9; border-radius: 4px; margin-top: 4px; }
+.fb-suggestion { font-size: 13px; color: var(--text-secondary); padding: 8px; background: #f9f9f9; border-radius: 4px; margin-top: 4px; }
 </style>

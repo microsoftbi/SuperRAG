@@ -1,4 +1,4 @@
-# SPRAG 开发工作指南
+# SuperRAG 开发工作指南
 
 > 开发者日常工作流、代码规范、调试技巧
 
@@ -8,7 +8,7 @@
 
 | 属性 | 内容 |
 |------|------|
-| 项目名 | SPRAG — Smart Product RAG |
+| 项目名 | SuperRAG — Smart Product RAG |
 | 后端框架 | Python FastAPI + SQLAlchemy 2.0 |
 | 前端框架 | Vue 3 (Composition API) + Vite 5 |
 | LLM | 火山引擎 API（OpenAI 兼容） |

@@ -87,7 +87,7 @@ onMounted(async () => {
 <style scoped>
 .uploader {
   padding: 16px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-default);
   border-radius: 8px;
 }
 .uploader h2 { font-size: 16px; margin-bottom: 12px; }
@@ -99,14 +99,14 @@ onMounted(async () => {
 .form input[type="file"] { font-size: 14px; }
 .form input[type="text"] {
   padding: 8px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--border-input);
   border-radius: 4px;
   font-size: 14px;
 }
 .form > button {
   padding: 8px 16px;
-  background: #1976d2;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-inverse);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -114,8 +114,8 @@ onMounted(async () => {
 }
 .form > button:disabled { background: #ccc; }
 .msg { font-size: 13px; }
-.msg.success { color: #2e7d32; }
-.msg.error { color: #c62828; }
+.msg.success { color: var(--color-success); }
+.msg.error { color: var(--color-danger); }
 
 .store-select {
   display: flex;
@@ -125,7 +125,7 @@ onMounted(async () => {
 }
 .form-label {
   font-size: 13px;
-  color: #555;
+  color: var(--text-secondary);
   font-weight: 500;
   min-width: 70px;
 }
@@ -133,19 +133,19 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   padding: 8px 12px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--border-input);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s;
   min-width: 120px;
 }
 .radio-option.active {
-  border-color: #1976d2;
-  background: #e3f2fd;
+  border-color: var(--color-primary);
+  background: var(--bg-active);
 }
 .radio-option input { display: none; }
-.radio-label { font-size: 13px; font-weight: 500; color: #333; }
-.radio-desc { font-size: 11px; color: #999; margin-top: 2px; }
+.radio-label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.radio-desc { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
 
 .kb-select {
   display: flex;

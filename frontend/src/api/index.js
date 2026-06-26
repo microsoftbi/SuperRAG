@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: '/api/v1',
   timeout: 120000,
 })
@@ -189,6 +189,14 @@ export function getGraph() {
   return api.get('/knowledge-graph/graph')
 }
 
+export function getEntityTypes() {
+  return api.get('/knowledge-graph/entity-types')
+}
+
+export function executeCypher(cypher) {
+  return api.post('/knowledge-graph/cypher', { cypher })
+}
+
 export function searchEntities(query) {
   return api.get('/knowledge-graph/entities/search', { params: { q: query } })
 }
@@ -235,6 +243,40 @@ export function batchDeleteEntities(ids) {
 
 export function batchDeleteRelationships(relationships) {
   return api.post('/knowledge-graph/relationships/batch-delete', { relationships })
+}
+
+// ── 类型管理 ──
+
+export function getNodeTypes() {
+  return api.get('/knowledge-graph/node-types')
+}
+
+export function createNodeType(data) {
+  return api.post('/knowledge-graph/node-types', data)
+}
+
+export function updateNodeType(name, data) {
+  return api.put(`/knowledge-graph/node-types/${name}`, data)
+}
+
+export function deleteNodeType(name) {
+  return api.delete(`/knowledge-graph/node-types/${name}`)
+}
+
+export function getRelationTypes() {
+  return api.get('/knowledge-graph/relation-types')
+}
+
+export function createRelationType(data) {
+  return api.post('/knowledge-graph/relation-types', data)
+}
+
+export function updateRelationType(name, data) {
+  return api.put(`/knowledge-graph/relation-types/${name}`, data)
+}
+
+export function deleteRelationType(name) {
+  return api.delete(`/knowledge-graph/relation-types/${name}`)
 }
 
 // ── NL2SQL ──

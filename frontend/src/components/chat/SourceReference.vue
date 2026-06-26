@@ -54,28 +54,28 @@ function showCypher(text) {
 </script>
 
 <style scoped>
-.source-references { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e0e0; }
-.label { font-size: 12px; color: #666; margin-bottom: 4px; }
+.source-references { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-default); }
+.label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
 .items { display: flex; flex-wrap: wrap; gap: 6px; }
 .source-item {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 8px; background: #e3f2fd; border-radius: 4px;
+  padding: 3px 8px; background: var(--bg-active); border-radius: 4px;
   font-size: 12px; cursor: pointer;
 }
-.badge { font-weight: bold; color: #1976d2; }
-.title { color: #555; }
-.score { color: #999; font-size: 11px; }
+.badge { font-weight: bold; color: var(--color-primary); }
+.title { color: var(--text-secondary); }
+.score { color: var(--text-tertiary); font-size: 11px; }
 .graph-btn {
-  padding: 1px 6px; border: 1px solid #ff9800; background: #fff3e0;
-  color: #e65100; border-radius: 3px; cursor: pointer; font-size: 11px;
+  padding: 1px 6px; border: 1px solid var(--color-warning); background: var(--color-warning-light);
+  color: var(--color-warning); border-radius: 3px; cursor: pointer; font-size: 11px;
   line-height: 1.4;
 }
 .graph-btn:hover { background: #ffe0b2; }
 .cypher-btn {
-  padding: 1px 6px; border: 1px solid #66bb6a; background: #e8f5e9;
-  color: #2e7d32; border-radius: 3px; cursor: pointer; font-size: 11px;
+  padding: 1px 6px; border: 1px solid var(--color-success); background: var(--color-success-light);
+  color: var(--color-success); border-radius: 3px; cursor: pointer; font-size: 11px;
   line-height: 1.4;
 }
 .cypher-btn:hover { background: #c8e6c9; }
-.preview { margin-top: 4px; padding: 4px; background: #fff; border-radius: 4px; font-size: 12px; color: #666; width: 100%; white-space: pre-wrap; }
+.preview { margin-top: 4px; padding: 4px; background: var(--bg-card); border-radius: 4px; font-size: 12px; color: var(--text-secondary); width: 100%; white-space: pre-wrap; }
 </style>

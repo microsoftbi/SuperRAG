@@ -41,6 +41,7 @@
       </div>
       <ChartView v-if="effectiveChartSpec" :spec="effectiveChartSpec" />
       <SourceReference v-if="sources && sources.length > 0" :sources="sources" @show-graph="$emit('show-graph', $event)" />
+      <RetrievalDebugPanel v-if="retrievalDetail" :detail="retrievalDetail" />
       <div v-if="role === 'assistant' && content && !loading" class="feedback-actions">
         <button
           :class="['fb-btn', { active: feedback === 'like' }]"
@@ -62,6 +63,7 @@ import { ref, computed } from 'vue'
 import SourceReference from './SourceReference.vue'
 import ChartView from './ChartView.vue'
 import ChartConfigPanel from './ChartConfigPanel.vue'
+import RetrievalDebugPanel from './RetrievalDebugPanel.vue'
 
 const props = defineProps({
   role: { type: String, required: true },
@@ -71,6 +73,7 @@ const props = defineProps({
   feedback: { type: String, default: '' },
   resultData: { type: String, default: '' },
   chartSpec: { type: Object, default: null },
+  retrievalDetail: { type: Object, default: null },
 })
 
 const emit = defineEmits(['feedback', 'show-graph'])
@@ -145,39 +148,39 @@ function copyCsv() {
   display: flex; align-items: center; justify-content: center;
   font-size: 14px; font-weight: bold; flex-shrink: 0;
 }
-.user .avatar { background: #1976d2; color: #fff; }
-.assistant .avatar { background: #e0e0e0; color: #333; }
+.user .avatar { background: var(--color-primary); color: var(--text-inverse); }
+.assistant .avatar { background: var(--border-default); color: var(--text-primary); }
 .bubble { max-width: 75%; }
 .user .bubble {
-  background: #1976d2; color: #fff; padding: 10px 14px;
+  background: var(--color-primary); color: var(--text-inverse); padding: 10px 14px;
   border-radius: 12px 4px 12px 12px; font-size: 14px;
 }
 .assistant .bubble {
-  background: #f5f5f5; padding: 10px 14px;
-  border-radius: 4px 12px 12px 12px; font-size: 14px; color: #333;
+  background: var(--bg-page); padding: 10px 14px;
+  border-radius: 4px 12px 12px 12px; font-size: 14px; color: var(--text-primary);
 }
 .content { line-height: 1.6; }
-.source-ref { font-size: 11px; color: #1976d2; cursor: pointer; }
-.feedback-actions { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e0e0; display: flex; gap: 4px; }
-.fb-btn { background: none; border: 1px solid #ddd; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 14px; }
-.fb-btn:hover { background: #f0f0f0; }
-.fb-btn.active { background: #e3f2fd; border-color: #1976d2; }
+.source-ref { font-size: 11px; color: var(--color-primary); cursor: pointer; }
+.feedback-actions { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-default); display: flex; gap: 4px; }
+.fb-btn { background: none; border: 1px solid var(--border-input); border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 14px; }
+.fb-btn:hover { background: var(--bg-hover); }
+.fb-btn.active { background: var(--bg-active); border-color: var(--color-primary); }
 .result-table { margin-top: 12px; }
 .result-table-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 6px; padding: 0 2px;
 }
-.result-count { font-size: 12px; color: #999; }
+.result-count { font-size: 12px; color: var(--text-tertiary); }
 .toolbar-actions { display: flex; gap: 6px; }
 .action-btn {
-  font-size: 11px; color: #1976d2; background: #fff;
-  border: 1px solid #1976d2; border-radius: 4px; padding: 2px 8px;
+  font-size: 11px; color: var(--color-primary); background: var(--bg-card);
+  border: 1px solid var(--color-primary); border-radius: 4px; padding: 2px 8px;
   cursor: pointer; line-height: 1.4;
 }
-.action-btn:hover { background: #e3f2fd; }
+.action-btn:hover { background: var(--bg-active); }
 .result-table-scroll {
   max-height: 420px; overflow: auto;
-  border: 1px solid #dde0e4; border-radius: 8px;
+  border: 1px solid var(--code-border); border-radius: 8px;
 }
 .result-table table {
   width: 100%; border-collapse: collapse; font-size: 13px;
@@ -185,19 +188,19 @@ function copyCsv() {
 }
 .result-table thead { position: sticky; top: 0; z-index: 1; }
 .result-table th {
-  background: #eef1f5; font-weight: 600; color: #333;
-  padding: 10px 10px; border-bottom: 2px solid #d0d4db;
+  background: var(--table-header-bg); font-weight: 600; color: var(--text-primary);
+  padding: 10px 10px; border-bottom: 2px solid var(--table-header-border);
   font-size: 12px; letter-spacing: 0.3px;
 }
 .result-table th.row-num,
 .result-table td.row-num {
   width: 32px; min-width: 32px; max-width: 32px;
-  text-align: center; color: #aaa; font-size: 11px;
-  background: #f6f8fa; padding: 8px 2px;
+  text-align: center; color: var(--text-muted); font-size: 11px;
+  background: var(--code-bg); padding: 8px 2px;
 }
 .result-table td {
-  padding: 8px 10px; border-bottom: 1px solid #eef0f3;
-  color: #444; max-width: 30vw;
+  padding: 8px 10px; border-bottom: 1px solid var(--border-light);
+  color: var(--text-primary); max-width: 30vw;
   overflow: hidden; text-overflow: ellipsis;
 }
 .result-table th.numeric,
@@ -205,7 +208,7 @@ function copyCsv() {
   text-align: right; font-variant-numeric: tabular-nums;
 }
 .result-table td.numeric { font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; font-size: 12px; }
-.result-table tbody tr:nth-child(even) td { background: #f8f9fb; }
-.result-table tbody tr:hover td { background: #e3f0fa; }
+.result-table tbody tr:nth-child(even) td { background: var(--bg-surface); }
+.result-table tbody tr:hover td { background: var(--bg-active); }
 .result-table tbody tr:last-child td { border-bottom: none; }
 </style>

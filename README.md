@@ -1,4 +1,4 @@
-# SPRAG — SuperRAG 客服对话 RAG + KG + NL2SQL 系统
+# SuperRAG 客服对话 RAG + KG + NL2SQL 系统
 
 面向终端客户的智能客服问答系统，基于 **RAG（检索增强生成）+ 知识图谱（Neo4j）** 双引擎 + **NL2SQL（自然语言问数）** 三合一架构。
 

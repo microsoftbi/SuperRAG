@@ -7,9 +7,16 @@
 
 import json
 import logging
+import re
 from neo4j import GraphDatabase
 
 logger = logging.getLogger(__name__)
+
+
+def cql_escape(val: str) -> str:
+    """将字符串转义为 Cypher 字符串字面量（单引号包围）。"""
+    escaped = val.replace("\\", "\\\\").replace("'", "\\'")
+    return f"'{escaped}'"
 
 
 class Neo4jService:
@@ -245,7 +252,9 @@ class Neo4jService:
                 src_data = node_map.get(record["src_name"])
                 dst_data = node_map.get(record["dst_name"])
                 if src_data and dst_data:
-                    key = (src_data["id"], dst_data["id"], record["rel_type"])
+                    # 无向查询会返回 (a→b) 和 (b→a) 两条，排序 id 去重
+                    ids = sorted([src_data["id"], dst_data["id"]])
+                    key = (ids[0], ids[1], record["rel_type"])
                     if key not in seen_edges:
                         seen_edges.add(key)
                         edges.append({
@@ -415,3 +424,179 @@ class Neo4jService:
                 """
             ).single()
             return int(rec["cnt"]) if rec else 0
+
+    def get_distinct_types(self) -> list[str]:
+        """获取知识图谱中所有已使用的实体类型。"""
+        with self.driver.session() as session:
+            result = session.run(
+                "MATCH (e:Entity) WHERE e.type IS NOT NULL "
+                "RETURN DISTINCT e.type AS type ORDER BY type"
+            )
+            return [r["type"] for r in result]
+
+    def count_entities_by_type(self, type_name: str) -> int:
+        """统计给定节点类型在 Neo4j 中的使用数。"""
+        with self.driver.session() as session:
+            rec = session.run(
+                "MATCH (e:Entity) WHERE e.type = $type RETURN count(e) AS cnt",
+                type=type_name,
+            ).single()
+            return int(rec["cnt"]) if rec else 0
+
+    def count_relationships_by_type(self, rel_type: str) -> int:
+        """统计给定关系类型在 Neo4j 中的使用数。"""
+        with self.driver.session() as session:
+            rec = session.run(
+                "MATCH ()-[r]->() WHERE type(r) = $type RETURN count(r) AS cnt",
+                type=rel_type,
+            ).single()
+            return int(rec["cnt"]) if rec else 0
+
+    def find_unregistered_types(self, db_session, is_node: bool = True) -> list[str]:
+        """查找 Neo4j 中使用了但未在 SQLite 注册的类型。"""
+        from app.models.kg_type import NodeType, RelationshipType
+
+        if is_node:
+            with self.driver.session() as session:
+                result = session.run(
+                    "MATCH (e:Entity) WHERE e.type IS NOT NULL "
+                    "RETURN DISTINCT e.type AS type"
+                )
+                neo4j_types = {r["type"] for r in result}
+            registered = {
+                r[0] for r in db_session.query(NodeType.name).all()
+            }
+        else:
+            with self.driver.session() as session:
+                # Cypher 没有直接的"查询所有关系类型"语法，用函数
+                result = session.run("CALL db.relationshipTypes()")
+                neo4j_types = {r["relationshipType"] for r in result}
+            registered = {
+                r[0] for r in db_session.query(RelationshipType.name).all()
+            }
+
+        return sorted(neo4j_types - registered)
+
+    def execute_cypher(self, cypher: str) -> dict:
+        """执行任意 Cypher 查询，返回摘要信息。
+
+        Returns:
+            {"success": bool, "summary": str, "count": int, "error": str | None}
+        """
+        with self.driver.session() as session:
+            try:
+                result = session.run(cypher)
+                summary = result.consume()
+                counters = summary.counters
+                total = (
+                    (counters.nodes_created or 0)
+                    + (counters.nodes_deleted or 0)
+                    + (counters.relationships_created or 0)
+                    + (counters.relationships_deleted or 0)
+                    + (counters.properties_set or 0)
+                    + (counters.labels_added or 0)
+                    + (counters.labels_removed or 0)
+                )
+                return {
+                    "success": True,
+                    "summary": (
+                        f"创建 {counters.nodes_created or 0} 节点, "
+                        f"创建 {counters.relationships_created or 0} 关系, "
+                        f"删除 {counters.nodes_deleted or 0} 节点, "
+                        f"删除 {counters.relationships_deleted or 0} 关系, "
+                        f"设置 {counters.properties_set or 0} 属性"
+                    ),
+                    "count": total,
+                    "error": None,
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "summary": "执行失败",
+                    "count": 0,
+                    "error": str(e),
+                }
+
+    def export_cypher(self) -> str:
+        """将当前图谱所有节点和关系导出为 Cypher MERGE 语句（幂等，可重复执行）。"""
+        with self.driver.session() as session:
+            # 节点（兼容所有标签，不限于 :Entity）
+            nodes_result = session.run(
+                "MATCH (n) WHERE n.name IS NOT NULL "
+                "RETURN n.name AS name, n.type AS type, labels(n) AS labels, "
+                "       n.internal_id AS internal_id, n.properties AS props "
+                "ORDER BY n.name"
+            )
+            lines = []
+            node_count = 0
+            for rec in nodes_result:
+                name = rec["name"]
+                # 类型推断（与 get_full_graph 一致）
+                ntype = rec["type"]
+                if not ntype:
+                    lbls = rec["labels"] or []
+                    if "Person" in lbls:
+                        ntype = "person"
+                    elif "Organization" in lbls:
+                        ntype = "org"
+                    elif "Location" in lbls:
+                        ntype = "location"
+                    elif "CaseNode" in lbls or "Case" in lbls:
+                        ntype = "concept"
+                    elif "Event" in lbls:
+                        ntype = "concept"
+                    elif "Item" in lbls:
+                        ntype = "product"
+                    else:
+                        ntype = "concept"
+                internal_id = rec["internal_id"] or str(hash(name))
+
+                var = f"n{node_count}"
+                set_items = [
+                    f"{var}.type = {cql_escape(ntype)}",
+                    f"{var}.internal_id = {cql_escape(internal_id)}",
+                ]
+                raw_props = rec["props"]
+                if raw_props and raw_props not in ("{}", ""):
+                    try:
+                        pobj = json.loads(raw_props) if isinstance(raw_props, str) else raw_props
+                        for k, v in pobj.items():
+                            set_items.append(f"{var}.{k} = {cql_escape(str(v))}")
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                on_create = ",\n        ".join(set_items)
+                lines.append(
+                    f"MERGE ({var}:Entity {{name: {cql_escape(name)}}})\n"
+                    f"ON CREATE SET\n    {on_create};"
+                )
+                node_count += 1
+
+            lines.append("")
+
+            # 关系（去重，兼容所有标签）
+            edges_result = session.run(
+                "MATCH (a)-[r]-(b) "
+                "WHERE a.name IS NOT NULL AND b.name IS NOT NULL AND a.name <> b.name "
+                "RETURN a.name AS src, b.name AS dst, type(r) AS rel_type"
+            )
+            seen = set()
+            edge_count = 0
+            for rec in edges_result:
+                src, dst = rec["src"], rec["dst"]
+                key = tuple(sorted([src, dst])) + (rec["rel_type"],)
+                if key in seen:
+                    continue
+                seen.add(key)
+                lines.append(
+                    f"MATCH (a:Entity {{name: {cql_escape(src)}}}), "
+                    f"(b:Entity {{name: {cql_escape(dst)}}})\n"
+                    f"MERGE (a)-[:{rec['rel_type']}]->(b);"
+                )
+                edge_count += 1
+
+            header = (
+                f"// SuperRAG 知识图谱导出\n"
+                f"// 节点: {node_count}, 关系: {edge_count}\n\n"
+            )
+            return header + "\n".join(lines)

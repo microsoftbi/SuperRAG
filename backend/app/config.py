@@ -1,17 +1,22 @@
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings
 
+# 项目根目录 = backend/（config.py 在 backend/app/ 下，往上一级）
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+
 
 class Settings(BaseSettings):
+    app_version: str = "0.2.0"
     volc_api_key: str = ""
     volc_endpoint: str = "ark.cn-beijing.volces.com"
     llm_model_name: str = ""
     embedding_model_name: str = ""
     embedding_dim: int = 2048
-    milvus_lite_uri: str = "./milvus_lite.db"
-    database_url: str = "sqlite:///./sprag.db"
-    upload_dir: str = "./uploads"
+    milvus_lite_uri: str = str(BACKEND_DIR / "milvus_lite.db")
+    database_url: str = f"sqlite:///{BACKEND_DIR / 'sprag.db'}"
+    upload_dir: str = str(BACKEND_DIR / "uploads")
 
     jwt_secret_key: str = "sprag-default-secret-change-in-production"
     jwt_auto_create_admin: bool = True
@@ -43,6 +48,14 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# 环境变量可以覆盖，未设置时用绝对路径
+if not os.environ.get("DATABASE_URL"):
+    settings.database_url = f"sqlite:///{BACKEND_DIR / 'sprag.db'}"
+if not os.environ.get("MILVUS_LITE_URI"):
+    settings.milvus_lite_uri = str(BACKEND_DIR / "milvus_lite.db")
+if not os.environ.get("UPLOAD_DIR"):
+    settings.upload_dir = str(BACKEND_DIR / "uploads")
 
 
 def ensure_dirs() -> None:

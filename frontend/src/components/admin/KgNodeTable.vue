@@ -41,7 +41,7 @@
             <td class="col-idx">{{ (page - 1) * pageSize + i + 1 }}</td>
             <td class="col-name" :title="n.name">{{ n.name }}</td>
             <td class="col-type">
-              <span class="type-tag">{{ n.type }}</span>
+              <span class="type-tag" :style="{ background: typeColorMap[n.type] || '#607d8b' }">{{ n.type }}</span>
             </td>
             <td class="col-num">{{ relCountMap[n.id] || 0 }}</td>
             <td class="col-num">{{ n.chunk_count || 0 }}</td>
@@ -67,7 +67,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { getNodeTypes } from '../../api/index.js'
 
 const props = defineProps({
   graphData: { type: Object, required: true },
@@ -79,6 +80,22 @@ const filterType = ref('')
 const page = ref(1)
 const pageSize = 30
 const selectedIds = ref(new Set())
+const typeColorMap = ref({})
+
+async function loadTypeColors() {
+  try {
+    const res = await getNodeTypes()
+    const map = {}
+    for (const t of (res.data || [])) {
+      map[t.name] = t.color || '#607d8b'
+    }
+    typeColorMap.value = map
+  } catch {
+    typeColorMap.value = {}
+  }
+}
+
+onMounted(loadTypeColors)
 
 const allSelected = computed(() =>
   pagedNodes.value.length > 0 && pagedNodes.value.every(n => selectedIds.value.has(n.id))
@@ -142,21 +159,21 @@ watch([searchText, filterType], () => { page.value = 1 })
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 .search-input {
-  padding: 6px 10px; border: 1px solid #d0d0d0; border-radius: 4px;
+  padding: 6px 10px; border: 1px solid var(--border-input); border-radius: 4px;
   font-size: 13px; min-width: 200px;
 }
 .type-filter {
-  padding: 6px 8px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 13px;
+  padding: 6px 8px; border: 1px solid var(--border-input); border-radius: 4px; font-size: 13px;
 }
-.count-hint { font-size: 12px; color: #999; }
+.count-hint { font-size: 12px; color: var(--text-tertiary); }
 .spacer { flex: 1; }
 .btn-create {
-  padding: 6px 12px; background: #1976d2; color: #fff;
+  padding: 6px 12px; background: var(--color-primary); color: var(--text-inverse);
   border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
 }
-.btn-create:hover { background: #1565c0; }
+.btn-create:hover { background: var(--color-primary-hover); }
 .btn-batch-delete {
-  padding: 6px 12px; background: #c62828; color: #fff;
+  padding: 6px 12px; background: #c62828; color: var(--text-inverse);
   border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
 }
 .btn-batch-delete:hover { background: #b71c1c; }
@@ -172,13 +189,13 @@ thead {
   background: #eef1f5;
 }
 th {
-  font-weight: 600; color: #333; padding: 10px;
+  font-weight: 600; color: var(--text-primary); padding: 10px;
   border-bottom: 2px solid #d0d4db; text-align: left;
   font-size: 12px;
 }
 td {
-  padding: 8px 10px; border-bottom: 1px solid #eef0f3;
-  color: #444;
+  padding: 8px 10px; border-bottom: 1px solid var(--border-light);
+  color: var(--text-primary);
 }
 tbody tr:nth-child(even) td { background: #f8f9fb; }
 tbody tr:hover td { background: #e3f0fa; }
@@ -193,26 +210,26 @@ tbody tr:hover td { background: #e3f0fa; }
 }
 .type-tag {
   display: inline-block; padding: 2px 8px; border-radius: 3px;
-  font-size: 11px; color: #fff; background: #607d8b;
+  font-size: 11px; color: var(--text-inverse); background: #607d8b;
 }
 .icon-btn {
   background: none; border: 1px solid; border-radius: 4px;
   cursor: pointer; padding: 3px 6px; margin-left: 4px; font-size: 12px;
 }
-.icon-btn.locate { color: #1976d2; border-color: #1976d2; }
-.icon-btn.locate:hover { background: #e3f2fd; }
+.icon-btn.locate { color: var(--color-primary); border-color: var(--color-primary); }
+.icon-btn.locate:hover { background: var(--bg-active); }
 .icon-btn.edit { color: #43a047; border-color: #43a047; }
-.icon-btn.edit:hover { background: #e8f5e9; }
-.icon-btn.delete { color: #c62828; border-color: #c62828; }
-.icon-btn.delete:hover { background: #ffebee; }
-.empty { text-align: center; color: #999; padding: 40px; }
+.icon-btn.edit:hover { background: var(--color-success-light); }
+.icon-btn.delete { color: var(--color-danger); border-color: var(--color-danger); }
+.icon-btn.delete:hover { background: var(--color-danger-light); }
+.empty { text-align: center; color: var(--text-tertiary); padding: 40px; }
 .pager {
   display: flex; align-items: center; justify-content: center; gap: 12px;
-  font-size: 13px; color: #666;
+  font-size: 13px; color: var(--text-secondary);
 }
 .pager button {
-  padding: 4px 10px; border: 1px solid #d0d0d0;
-  background: #fff; border-radius: 4px; cursor: pointer;
+  padding: 4px 10px; border: 1px solid var(--border-input);
+  background: var(--bg-card); border-radius: 4px; cursor: pointer;
 }
-.pager button:disabled { color: #ccc; cursor: not-allowed; }
+.pager button:disabled { color: var(--text-muted); cursor: not-allowed; }
 </style>

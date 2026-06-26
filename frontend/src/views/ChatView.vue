@@ -1,9 +1,10 @@
 <template>
   <div class="chat-page">
     <header class="chat-header">
-      <h1>SPRAG 客服助手</h1>
+      <h1>SuperRAG 客服助手 <span class="version">v{{ appVersion }}</span></h1>
       <div class="header-right">
         <router-link v-if="isAdmin" to="/admin" class="admin-link">管理后台</router-link>
+        <button class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换到浅色模式' : '切换到深色模式'">{{ isDark ? '🌙' : '☀️' }}</button>
         <span class="user-info">{{ username }}</span>
         <button @click="logout" class="logout-btn">退出</button>
       </div>
@@ -41,9 +42,19 @@ import { useRouter } from 'vue-router'
 import ChatWindow from '../components/chat/ChatWindow.vue'
 import Nl2SqlChat from '../components/chat/Nl2SqlChat.vue'
 import SessionSidebar from '../components/chat/SessionSidebar.vue'
-import { getChatSessions, deleteChatSession } from '../api/index.js'
+import { getChatSessions, deleteChatSession, getRuntimeConfig } from '../api/index.js'
+import { useTheme } from '../composables/useTheme.js'
 
 const router = useRouter()
+const { isDark, toggle: toggleTheme } = useTheme()
+const appVersion = ref('')
+
+async function loadVersion() {
+  try {
+    const res = await getRuntimeConfig()
+    appVersion.value = res.data?.app_version || ''
+  } catch { /* ignore */ }
+}
 
 const user = computed(() => {
   try { return JSON.parse(localStorage.getItem('user')) } catch { return null }
@@ -82,6 +93,7 @@ async function loadSessions() {
 
 onMounted(async () => {
   initSessionId()
+  loadVersion()
   await loadSessions()
 })
 
@@ -135,6 +147,7 @@ function logout() {
   height: 100vh;
   max-width: 1100px;
   margin: 0 auto;
+  background: var(--bg-card);
 }
 .chat-body {
   display: flex;
@@ -146,28 +159,36 @@ function logout() {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-default);
 }
-.chat-header h1 { font-size: 18px; color: #333; }
+.chat-header h1 { font-size: 18px; color: var(--text-primary); }
+.chat-header .version { font-size: 11px; color: var(--text-tertiary); font-weight: 400; margin-left: 4px; }
 .header-right { display: flex; align-items: center; gap: 12px; }
-.admin-link { color: #1976d2; text-decoration: none; font-size: 14px; }
-.user-info { font-size: 13px; color: #888; }
-.logout-btn {
-  padding: 4px 12px; border: 1px solid #d0d0d0; border-radius: 4px;
-  background: #fff; cursor: pointer; font-size: 12px; color: #666;
+.theme-toggle {
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; padding: 4px; line-height: 1;
+  border-radius: 4px; transition: background 0.2s;
 }
-.logout-btn:hover { background: #f5f5f5; }
+.theme-toggle:hover { background: var(--bg-hover); }
+.admin-link { color: var(--color-primary); text-decoration: none; font-size: 14px; }
+.user-info { font-size: 13px; color: var(--text-tertiary); }
+.logout-btn {
+  padding: 4px 12px; border: 1px solid var(--border-input); border-radius: 4px;
+  background: var(--bg-card); cursor: pointer; font-size: 12px; color: var(--text-secondary);
+}
+.logout-btn:hover { background: var(--bg-hover); }
 .mode-tabs {
   display: flex; gap: 2px;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid var(--border-default);
   padding: 0 20px;
+  background: var(--bg-card);
 }
 .mode-tab {
   padding: 8px 20px; border: none; background: none; cursor: pointer;
-  font-size: 14px; color: #666;
+  font-size: 14px; color: var(--text-secondary);
   border-bottom: 2px solid transparent; margin-bottom: -2px;
 }
-.mode-tab.active { color: #1976d2; border-bottom-color: #1976d2; font-weight: 600; }
-.mode-tab:hover:not(.active):not(.disabled) { color: #333; }
-.mode-tab.disabled { color: #ccc; cursor: not-allowed; }
+.mode-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
+.mode-tab:hover:not(.active):not(.disabled) { color: var(--text-primary); }
+.mode-tab.disabled { color: var(--text-muted); cursor: not-allowed; }
 </style>

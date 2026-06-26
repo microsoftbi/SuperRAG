@@ -105,20 +105,20 @@ onMounted(load)
 .settings-panel h2 { font-size: 16px; margin-bottom: 16px; }
 .settings-form { display: flex; flex-direction: column; gap: 14px; }
 .field { display: flex; flex-direction: column; gap: 4px; }
-.field label { font-size: 13px; color: #555; font-weight: 500; }
+.field label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
 .field select, .field input {
-  padding: 8px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 14px;
+  padding: 8px; border: 1px solid var(--border-input); border-radius: 4px; font-size: 14px;
 }
 .save-btn {
-  padding: 10px 20px; background: #1976d2; color: #fff; border: none;
+  padding: 10px 20px; background: var(--color-primary); color: var(--text-inverse); border: none;
   border-radius: 4px; cursor: pointer; font-size: 14px; align-self: flex-start;
 }
 .save-btn:disabled { background: #ccc; }
 .msg { font-size: 13px; }
-.msg.success { color: #2e7d32; }
-.msg.error { color: #c62828; }
-.field-hint { font-size: 11px; color: #999; }
+.msg.success { color: var(--color-success); }
+.msg.error { color: var(--color-danger); }
+.field-hint { font-size: 11px; color: var(--text-tertiary); }
 .toggle-field { flex-direction: row; align-items: center; gap: 8px; }
-.toggle-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 13px; color: #555; }
+.toggle-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 13px; color: var(--text-secondary); }
 .toggle-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
 </style>

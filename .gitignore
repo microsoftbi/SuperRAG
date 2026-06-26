@@ -9,5 +9,5 @@ uploads/
 node_modules/
 dist/
 .DS_Store
+.claude/
 MEMORY/
-=3.9.1

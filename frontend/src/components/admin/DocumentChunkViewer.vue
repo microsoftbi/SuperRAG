@@ -54,14 +54,14 @@ onMounted(async () => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
 }
 .modal {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 10px;
   width: 700px;
   max-width: 90vw;
@@ -75,11 +75,11 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-default);
 }
 .modal-header h3 {
   font-size: 15px;
-  color: #333;
+  color: var(--text-primary);
   margin: 0;
 }
 .close-btn {
@@ -87,11 +87,11 @@ onMounted(async () => {
   border: none;
   font-size: 18px;
   cursor: pointer;
-  color: #999;
+  color: var(--text-tertiary);
   padding: 2px 6px;
   border-radius: 4px;
 }
-.close-btn:hover { background: #f0f0f0; color: #555; }
+.close-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
 .modal-body {
   flex: 1;
   overflow-y: auto;
@@ -100,13 +100,13 @@ onMounted(async () => {
 .loading, .error {
   text-align: center;
   padding: 40px;
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 14px;
 }
-.error { color: #c62828; }
+.error { color: var(--color-danger); }
 .chunk-list { display: flex; flex-direction: column; gap: 12px; }
 .chunk-item {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -114,12 +114,12 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #f5f5f5;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--bg-page);
+  border-bottom: 1px solid var(--border-default);
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
 }
-.chunk-index { font-weight: 600; color: #333; }
+.chunk-index { font-weight: 600; color: var(--text-primary); }
 .chunk-content {
   padding: 12px;
   margin: 0;
@@ -127,9 +127,9 @@ onMounted(async () => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-wrap: break-word;
-  color: #444;
+  color: var(--text-primary);
   max-height: 300px;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--bg-surface);
 }
 </style>

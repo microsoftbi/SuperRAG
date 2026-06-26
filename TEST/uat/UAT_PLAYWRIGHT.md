@@ -1,4 +1,4 @@
-# SPRAG UI 自动化测试用例 (Playwright)
+# SuperRAG UI 自动化测试用例 (Playwright)
 
 ## 基本信息
 

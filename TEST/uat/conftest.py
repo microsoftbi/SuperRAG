@@ -1,4 +1,4 @@
-"""Playwright fixtures for SPRAG UAT.
+"""Playwright fixtures for SuperRAG UAT.
 
 Each test gets its own fresh page with API mocking.
 set_logged_in() helper sets localStorage then navigates to admin.

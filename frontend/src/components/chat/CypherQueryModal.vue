@@ -24,39 +24,39 @@ defineEmits(['close'])
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
 }
 .modal {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 10px;
   width: 680px;
   max-width: 90vw;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
 }
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-default);
 }
 .modal-header h3 {
   font-size: 15px;
-  color: #333;
+  color: var(--text-primary);
   margin: 0;
 }
 .close-btn {
   background: none; border: none; font-size: 18px;
-  cursor: pointer; color: #999; padding: 2px 6px; border-radius: 4px;
+  cursor: pointer; color: var(--text-tertiary); padding: 2px 6px; border-radius: 4px;
 }
-.close-btn:hover { background: #f0f0f0; color: #555; }
+.close-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
 .modal-body {
   flex: 1;
   overflow-y: auto;
@@ -79,6 +79,6 @@ defineEmits(['close'])
   text-align: center;
   margin-top: 12px;
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 </style>

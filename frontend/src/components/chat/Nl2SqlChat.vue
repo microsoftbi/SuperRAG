@@ -150,18 +150,18 @@ async function handleFeedback(index, rating) {
 <style scoped>
 .chat-window { flex: 1; display: flex; flex-direction: column; }
 .messages { flex: 1; overflow-y: auto; padding: 16px 20px; }
-.empty-state { text-align: center; color: #999; margin-top: 40px; font-size: 15px; }
+.empty-state { text-align: center; color: var(--text-tertiary); margin-top: 40px; font-size: 15px; }
 .input-area {
   display: flex; gap: 8px; padding: 12px 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-default);
 }
 .input-area textarea {
-  flex: 1; resize: none; padding: 10px; border: 1px solid #d0d0d0;
+  flex: 1; resize: none; padding: 10px; border: 1px solid var(--border-input);
   border-radius: 8px; font-size: 14px; outline: none;
 }
 .input-area button {
-  padding: 10px 20px; background: #1976d2; color: #fff;
+  padding: 10px 20px; background: var(--color-primary); color: var(--text-inverse);
   border: none; border-radius: 8px; cursor: pointer; font-size: 14px;
 }
-.input-area button:disabled { background: #ccc; cursor: not-allowed; }
+.input-area button:disabled { background: var(--text-muted); cursor: not-allowed; }
 </style>

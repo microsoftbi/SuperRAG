@@ -1,8 +1,9 @@
 <template>
   <div class="admin-page">
     <header class="admin-header">
-      <h1>管理后台</h1>
+      <h1>管理后台 <span class="version">v{{ appVersion }}</span></h1>
       <div class="nav">
+        <button class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换到浅色模式' : '切换到深色模式'">{{ isDark ? '🌙' : '☀️' }}</button>
         <router-link to="/">返回对话</router-link>
         <button @click="logout" class="logout-btn">退出</button>
       </div>
@@ -99,9 +100,22 @@ import KnowledgeGraphViewer from '../components/admin/KnowledgeGraphViewer.vue'
 import DocumentChunkViewer from '../components/admin/DocumentChunkViewer.vue'
 import Nl2SqlPanel from '../components/admin/Nl2SqlPanel.vue'
 import { listDocuments, deleteDocument, reprocessDocument, listKnowledgeBases } from '../api/index.js'
+import { getRuntimeConfig } from '../api/index.js'
 import { useRouter } from 'vue-router'
+import { useTheme } from '../composables/useTheme.js'
 
 const router = useRouter()
+const { isDark, toggle: toggleTheme } = useTheme()
+const appVersion = ref('')
+
+async function loadVersion() {
+  try {
+    const res = await getRuntimeConfig()
+    appVersion.value = res.data?.app_version || ''
+  } catch { /* ignore */ }
+}
+
+onMounted(loadVersion)
 
 function logout() {
   localStorage.removeItem('token')
@@ -171,46 +185,53 @@ onMounted(loadDocuments)
 <style scoped>
 .admin-page { max-width: 1100px; margin: 0 auto; padding: 20px; }
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.admin-header h1 { font-size: 22px; }
-.admin-header a { color: #1976d2; text-decoration: none; font-size: 14px; }
+.admin-header h1 { font-size: 22px; color: var(--text-primary); }
+.version { font-size: 12px; color: var(--text-tertiary); font-weight: 400; margin-left: 6px; }
+.admin-header a { color: var(--color-primary); text-decoration: none; font-size: 14px; }
 .nav { display: flex; align-items: center; gap: 12px; }
-.logout-btn {
-  padding: 4px 12px; border: 1px solid #d0d0d0; border-radius: 4px;
-  background: #fff; cursor: pointer; font-size: 12px; color: #666;
+.theme-toggle {
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; padding: 4px; line-height: 1;
+  border-radius: 4px; transition: background 0.2s;
 }
-.logout-btn:hover { background: #f5f5f5; }
-.tabs { display: flex; gap: 4px; border-bottom: 2px solid #e0e0e0; margin-bottom: 20px; }
+.theme-toggle:hover { background: var(--bg-hover); }
+.logout-btn {
+  padding: 4px 12px; border: 1px solid var(--border-input); border-radius: 4px;
+  background: var(--bg-card); cursor: pointer; font-size: 12px; color: var(--text-secondary);
+}
+.logout-btn:hover { background: var(--bg-hover); }
+.tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border-default); margin-bottom: 20px; }
 .tab {
   padding: 8px 20px; border: none; background: none; cursor: pointer;
-  font-size: 14px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px;
+  font-size: 14px; color: var(--text-secondary); border-bottom: 2px solid transparent; margin-bottom: -2px;
 }
-.tab.active { color: #1976d2; border-bottom-color: #1976d2; font-weight: 600; }
+.tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
 .admin-content { display: flex; flex-direction: column; gap: 24px; }
 .doc-list h2 { font-size: 16px; margin-bottom: 8px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e0e0e0; }
-th { background: #f5f5f5; font-weight: 600; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-default); }
+th { background: var(--table-header-bg); font-weight: 600; }
 .status { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-.status.ready { background: #e8f5e9; color: #2e7d32; }
-.status.failed { background: #ffebee; color: #c62828; }
-.status.processing { background: #fff3e0; color: #ef6c00; }
-.status.pending { background: #f5f5f5; color: #666; }
+.status.ready { background: var(--color-success-light); color: var(--color-success); }
+.status.failed { background: var(--color-danger-light); color: var(--color-danger); }
+.status.processing { background: var(--color-warning-light); color: var(--color-warning); }
+.status.pending { background: var(--bg-hover); color: var(--text-secondary); }
 .actions { white-space: nowrap; }
-.delete-btn { padding: 4px 10px; background: #ef5350; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px; }
-.retry-btn { padding: 4px 10px; background: #ff9800; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px; }
-.retry-btn:hover { background: #f57c00; }
-.chunk-btn { padding: 4px 10px; background: #1976d2; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
-.chunk-btn:hover { background: #1565c0; }
-.empty { text-align: center; color: #999; padding: 24px; }
+.delete-btn { padding: 4px 10px; background: var(--color-danger); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px; }
+.retry-btn { padding: 4px 10px; background: var(--color-warning); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px; }
+.retry-btn:hover { opacity: 0.85; }
+.chunk-btn { padding: 4px 10px; background: var(--color-primary); color: var(--text-inverse); border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.chunk-btn:hover { background: var(--color-primary-hover); }
+.empty { text-align: center; color: var(--text-tertiary); padding: 24px; }
 .kb-badges { display: flex; gap: 3px; flex-wrap: wrap; }
-.badge { padding: 1px 6px; background: #e3f2fd; color: #1565c0; border-radius: 3px; font-size: 11px; }
-.no-kb { color: #ccc; }
+.badge { padding: 1px 6px; background: var(--color-primary-light); color: var(--color-primary); border-radius: 3px; font-size: 11px; }
+.no-kb { color: var(--text-muted); }
 
 .doc-tabs {
   display: flex;
   gap: 2px;
   margin-bottom: 12px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-default);
 }
 .doc-tab {
   padding: 6px 18px;
@@ -218,13 +239,13 @@ th { background: #f5f5f5; font-weight: 600; }
   background: none;
   cursor: pointer;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
 .doc-tab.active {
-  color: #1976d2;
-  border-bottom-color: #1976d2;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
   font-weight: 600;
 }
 .store-badge {
@@ -234,7 +255,7 @@ th { background: #f5f5f5; font-weight: 600; }
   font-size: 11px;
   font-weight: 500;
 }
-.store-badge.vector { background: #e8f5e9; color: #2e7d32; }
-.store-badge.graph  { background: #fff3e0; color: #ef6c00; }
-.store-badge.both   { background: #e3f2fd; color: #1565c0; }
+.store-badge.vector { background: var(--color-success-light); color: var(--color-success); }
+.store-badge.graph  { background: var(--color-warning-light); color: var(--color-warning); }
+.store-badge.both   { background: var(--color-primary-light); color: var(--color-primary); }
 </style>

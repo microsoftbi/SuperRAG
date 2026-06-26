@@ -27,7 +27,7 @@ from app.rag.retriever import Retriever
 from app.rag.query_rewriter import QueryRewriter
 from app.kg.graph_retriever import GraphRetriever
 from app.agents.agent_factory import get_rag_agent, get_kg_agent, get_nl2sql_agent
-from app.agents.tools import reset_tool_state, get_collected_sources, _build_minigraph
+from app.agents.tools import reset_tool_state, get_collected_sources, get_retrieval_detail, cache_retrieval_detail, _build_minigraph
 from langchain_core.messages import HumanMessage, AIMessage
 
 logger = logging.getLogger(__name__)
@@ -263,7 +263,7 @@ async def chat(
 
             if request.mode == "rag":
                 try:
-                    rag_ctx, _ = rag_retriever.retrieve(rewritten)
+                    rag_ctx, _, rag_detail = rag_retriever.retrieve_detail(rewritten)
                     if rag_ctx:
                         sources = [{
                             "chunk_id": ctx["id"],
@@ -272,6 +272,8 @@ async def chat(
                             "score": round(ctx.get("rerank_score", ctx.get("score", 0)), 4),
                             "type": "rag",
                         } for ctx in rag_ctx[:5] if ctx.get("rerank_score", ctx.get("score", 0)) > 0]
+                        # 缓存 detail 供后续推送
+                        cache_retrieval_detail(rag_detail)
                 except Exception as e:
                     logger.debug("RAG sources build skipped: %s", e)
 
@@ -286,7 +288,13 @@ async def chat(
         except Exception:
             db.rollback()
 
-        # ── 8. 推送 sources + DONE ──
+        # ── 8. 推送 retrieval_detail（RAG 模式调试用）──
+        if request.mode == "rag":
+            detail = get_retrieval_detail()
+            if detail:
+                yield f"data: {json.dumps({'type': 'retrieval_detail', 'detail': detail}, ensure_ascii=False)}\n\n"
+
+        # ── 9. 推送 sources + DONE ──
         yield f"data: {json.dumps({'type': 'sources', 'sources': sources}, ensure_ascii=False)}\n\n"
         yield "data: [DONE]\n\n"
 

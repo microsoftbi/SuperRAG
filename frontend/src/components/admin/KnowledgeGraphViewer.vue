@@ -55,6 +55,11 @@
         @delete="confirmDeleteEdge"
         @batch-delete="confirmBatchDeleteEdges"
       />
+      <KgTypeManager
+        v-if="activeTab === 'type-mgr'"
+      />
+      <CypherImport v-if="activeTab === 'cypher'" />
+      <CypherExport v-if="activeTab === 'cypher-export'" />
     </div>
 
     <KgNodeEditor
@@ -83,6 +88,9 @@ import { ref, computed, onMounted } from 'vue'
 import KgGraphTab from './KgGraphTab.vue'
 import KgNodeTable from './KgNodeTable.vue'
 import KgEdgeTable from './KgEdgeTable.vue'
+import CypherImport from './CypherImport.vue'
+import CypherExport from './CypherExport.vue'
+import KgTypeManager from './KgTypeManager.vue'
 import KgNodeEditor from './KgNodeEditor.vue'
 import KgEdgeEditor from './KgEdgeEditor.vue'
 import {
@@ -95,6 +103,9 @@ const tabs = [
   { key: 'graph', label: '🌐 图谱视图' },
   { key: 'nodes', label: '📦 节点管理' },
   { key: 'edges', label: '🔗 关系管理' },
+  { key: 'type-mgr', label: '📋 类型管理' },
+  { key: 'cypher', label: '🔍 Cypher 导入' },
+  { key: 'cypher-export', label: '📤 Cypher 导出' },
 ]
 
 const activeTab = ref('graph')
@@ -237,7 +248,7 @@ onMounted(loadGraph)
 }
 .kg-header h3 { margin: 0; font-size: 16px; }
 .kg-badge {
-  background: #e3f2fd; color: #1565c0;
+  background: var(--bg-active); color: var(--color-primary);
   padding: 3px 10px; border-radius: 10px; font-size: 12px;
 }
 .header-actions { margin-left: auto; display: flex; gap: 8px; }
@@ -245,25 +256,25 @@ onMounted(loadGraph)
   padding: 6px 14px; border: none; border-radius: 4px;
   cursor: pointer; font-size: 13px;
 }
-.btn-primary { background: #1976d2; color: #fff; }
+.btn-primary { background: var(--color-primary); color: var(--text-inverse); }
 .btn-primary:disabled { background: #b0bec5; cursor: not-allowed; }
-.btn-rebuild { background: #ff9800; color: #fff; }
-.btn-rebuild:disabled { background: #e0e0e0; cursor: not-allowed; }
+.btn-rebuild { background: var(--color-warning); color: var(--text-inverse); }
+.btn-rebuild:disabled { background: var(--border-default); cursor: not-allowed; }
 .kg-tabs {
-  display: flex; gap: 0; border-bottom: 1px solid #e0e0e0;
+  display: flex; gap: 0; border-bottom: 1px solid var(--border-default);
 }
 .kg-tab {
   background: none; border: none; padding: 8px 16px;
-  font-size: 13px; cursor: pointer; color: #666;
+  font-size: 13px; cursor: pointer; color: var(--text-secondary);
   border-bottom: 2px solid transparent;
 }
 .kg-tab.active {
-  color: #1976d2; border-bottom-color: #1976d2; font-weight: 600;
+  color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600;
 }
-.kg-tab:hover:not(.active) { color: #333; }
+.kg-tab:hover:not(.active) { color: var(--text-primary); }
 .kg-body { flex: 1; min-height: 500px; }
 .error-msg {
-  padding: 8px 12px; background: #ffebee; color: #c62828;
+  padding: 8px 12px; background: var(--color-danger-light); color: var(--color-danger);
   border-radius: 4px; font-size: 13px;
 }
 </style>

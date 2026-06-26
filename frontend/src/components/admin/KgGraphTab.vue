@@ -71,22 +71,67 @@ const selectedNode = ref(null)
 let network = null
 let visNodes = null
 let visEdges = null
+const registeredTypes = ref({})   // typeName → {color, label}
 
-const typeColors = {
-  person: '#e91e63', org: '#2196f3', product: '#4caf50',
-  concept: '#ff9800', location: '#9c27b0',
+const getCSSVar = (name, fallback) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+
+async function loadRegisteredTypes() {
+  try {
+    const { getNodeTypes } = await import('../../api/index.js')
+    const res = await getNodeTypes()
+    const map = {}
+    for (const t of (res.data || [])) {
+      map[t.name] = {
+        color: t.color || getCSSVar('--graph-type-default', '#607d8b'),
+        label: t.label || t.name,
+      }
+    }
+    registeredTypes.value = map
+  } catch {
+    // fallback
+  }
 }
-const typeLabels = {
-  person: '人物', org: '组织', product: '产品/项目',
-  concept: '概念', location: '地点',
+
+function getTypeColors() {
+  return Object.fromEntries(
+    Object.entries(registeredTypes.value).map(([k, v]) => [k, v.color])
+  )
 }
-const typeLegend = Object.entries(typeColors).map(([t, color]) => ({
-  type: t, color, label: typeLabels[t] || t,
-}))
+
+function typeLabel(t) {
+  return registeredTypes.value[t]?.label || t
+}
+
+const typeLegend = computed(() => {
+  // 从 graphData 中收集所有出现的类型，加上已注册的类型
+  const seen = new Set()
+  const items = []
+  // 已注册的类型优先
+  for (const [name, info] of Object.entries(registeredTypes.value)) {
+    seen.add(name)
+    items.push({ type: name, color: info.color, label: info.label })
+  }
+  // graphData 中有但未注册的类型
+  for (const n of (props.graphData.nodes || [])) {
+    if (n.type && !seen.has(n.type)) {
+      seen.add(n.type)
+      items.push({
+        type: n.type,
+        color: getCSSVar('--graph-type-default', '#607d8b'),
+        label: n.type,
+      })
+    }
+  }
+  return items
+})
 
 const hasGraph = computed(() => props.graphData.nodes?.length > 0)
 
-function colorForType(t) { return typeColors[t] || '#90a4ae' }
+function colorForType(t) {
+  const colors = getTypeColors()
+  return colors[t] || getCSSVar('--graph-type-default', '#607d8b')
+}
 
 function renderGraph() {
   if (!container.value) return
@@ -95,16 +140,22 @@ function renderGraph() {
   const { nodes, edges } = props.graphData
   if (!nodes?.length) return
 
+  const nodeFontColor = getCSSVar('--graph-node-font', '#444')
+  const edgeColor = getCSSVar('--graph-edge-color', '#ccc')
+  const edgeFontColor = getCSSVar('--graph-edge-font', '#888')
+  const highlightColor = getCSSVar('--graph-highlight', '#1976d2')
+  const nodeBorder = getCSSVar('--graph-node-border', '#fff')
+
   visNodes = new DataSet(nodes.map(n => ({
     id: n.id,
     label: n.name,
     color: colorForType(n.type),
-    title: `${n.name} · ${typeLabels[n.type] || n.type}`,
+    title: `${n.name} · ${typeLabel(n.type)}`,
     shape: 'dot',
     size: 22,
-    font: { size: 12, color: '#444' },
+    font: { size: 12, color: nodeFontColor },
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: nodeBorder,
   })))
 
   visEdges = new DataSet(edges.map((e, i) => ({
@@ -114,8 +165,8 @@ function renderGraph() {
     label: e.type,
     arrows: { to: { enabled: true, scaleFactor: 0.7 } },
     smooth: { type: 'continuous' },
-    font: { size: 10, color: '#888', strokeWidth: 0 },
-    color: { color: '#ccc', highlight: '#1976d2' },
+    font: { size: 10, color: edgeFontColor, strokeWidth: 0 },
+    color: { color: edgeColor, highlight: highlightColor },
     width: 1.5,
   })))
 
@@ -218,16 +269,27 @@ function resetHighlight() {
 
 watch(() => props.graphData, async () => {
   selectedNode.value = null
+  await loadRegisteredTypes()
   await nextTick()
   renderGraph()
 }, { deep: false })
 
-onMounted(() => {
+onMounted(async () => {
+  await loadRegisteredTypes()
   nextTick(renderGraph)
 })
 
 onUnmounted(() => {
   if (network) { network.destroy(); network = null }
+})
+
+// Re-render on theme change
+import { useTheme } from '../../composables/useTheme.js'
+const { isDark } = useTheme()
+watch(isDark, () => {
+  if (hasGraph.value) {
+    loadRegisteredTypes().then(() => nextTick(renderGraph))
+  }
 })
 </script>
 
@@ -235,66 +297,66 @@ onUnmounted(() => {
 .kg-graph-tab { display: flex; flex-direction: column; gap: 10px; }
 .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .search-input {
-  padding: 6px 10px; border: 1px solid #d0d0d0; border-radius: 4px;
+  padding: 6px 10px; border: 1px solid var(--border-input); border-radius: 4px;
   font-size: 13px; min-width: 200px;
 }
 .spacer { flex: 1; }
 .btn-create {
-  padding: 6px 12px; background: #1976d2; color: #fff;
+  padding: 6px 12px; background: var(--color-primary); color: var(--text-inverse);
   border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
 }
-.btn-create:hover { background: #1565c0; }
+.btn-create:hover { background: var(--color-primary-hover); }
 .main-area { display: flex; gap: 12px; min-height: 0; }
 .graph-canvas {
-  flex: 1; border: 1px solid #e0e0e0; border-radius: 6px;
-  height: 600px; background: #fafafa; position: relative;
+  flex: 1; border: 1px solid var(--border-default); border-radius: 6px;
+  height: 600px; background: var(--bg-surface); position: relative;
 }
 .graph-canvas.empty { display: flex; align-items: center; justify-content: center; }
-.placeholder { color: #999; font-size: 14px; }
+.placeholder { color: var(--text-tertiary); font-size: 14px; }
 .detail-panel {
-  width: 280px; background: #fff; border: 1px solid #e0e0e0;
+  width: 280px; background: #fff; border: 1px solid var(--border-default);
   border-radius: 6px; padding: 14px; position: relative;
   align-self: flex-start; max-height: 600px; overflow-y: auto;
 }
 .close-detail {
   position: absolute; top: 6px; right: 6px;
-  border: none; background: none; cursor: pointer; color: #999; font-size: 14px;
+  border: none; background: none; cursor: pointer; color: var(--text-tertiary); font-size: 14px;
 }
 .detail-panel h4 { margin: 0 0 6px; font-size: 15px; word-break: break-all; }
 .type-tag {
   display: inline-block; padding: 2px 8px; border-radius: 3px;
-  font-size: 11px; color: #fff; background: #607d8b; margin-bottom: 8px;
+  font-size: 11px; color: var(--text-inverse); background: #607d8b; margin-bottom: 8px;
 }
-.stat { font-size: 13px; color: #666; margin: 4px 0; }
+.stat { font-size: 13px; color: var(--text-secondary); margin: 4px 0; }
 .detail-actions { display: flex; gap: 6px; margin: 10px 0; }
 .btn-edit, .btn-delete {
   flex: 1; padding: 5px 0; font-size: 12px;
   border: 1px solid; border-radius: 4px; cursor: pointer;
 }
-.btn-edit { color: #1976d2; border-color: #1976d2; background: #fff; }
-.btn-edit:hover { background: #e3f2fd; }
-.btn-delete { color: #c62828; border-color: #c62828; background: #fff; }
-.btn-delete:hover { background: #ffebee; }
-.relations h5 { margin: 10px 0 6px; font-size: 13px; color: #555; }
+.btn-edit { color: var(--color-primary); border-color: var(--color-primary); background: #fff; }
+.btn-edit:hover { background: var(--bg-active); }
+.btn-delete { color: var(--color-danger); border-color: var(--color-danger); background: #fff; }
+.btn-delete:hover { background: var(--color-danger-light); }
+.relations h5 { margin: 10px 0 6px; font-size: 13px; color: var(--text-secondary); }
 .rel-item {
   font-size: 12px; padding: 4px 0;
   display: flex; gap: 6px; align-items: center;
   border-bottom: 1px dashed #eee;
 }
-.rel-dir { color: #1976d2; font-weight: bold; }
+.rel-dir { color: var(--color-primary); font-weight: bold; }
 .rel-type { color: #a0a0a0; font-style: italic; flex-shrink: 0; }
 .rel-target {
-  color: #333; flex: 1; overflow: hidden;
+  color: var(--text-primary); flex: 1; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap;
 }
 .rel-del {
   background: none; border: none; cursor: pointer;
-  color: #999; font-size: 12px; padding: 0 4px;
+  color: var(--text-tertiary); font-size: 12px; padding: 0 4px;
 }
-.rel-del:hover { color: #c62828; }
+.rel-del:hover { color: var(--color-danger); }
 .legend {
   display: flex; gap: 16px; flex-wrap: wrap;
-  font-size: 12px; color: #666;
+  font-size: 12px; color: var(--text-secondary);
 }
 .legend-item { display: flex; align-items: center; gap: 4px; }
 .dot { width: 10px; height: 10px; border-radius: 50%; }

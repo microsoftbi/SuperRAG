@@ -1,4 +1,3 @@
-# backend/app/rag/retriever.py
 """Enhanced retriever that orchestrates query rewriting, hybrid retrieval, and re-ranking."""
 
 from app.config import settings
@@ -46,19 +45,43 @@ class Retriever:
         Returns:
             Tuple of (contexts, rewritten_query)
         """
+        contexts, rewritten, _ = self.retrieve_detail(query, history, k, doc_ids)
+        return contexts, rewritten
+
+    def retrieve_detail(
+        self,
+        query: str,
+        history: list[dict] | None = None,
+        k: int | None = None,
+        doc_ids: list[int] | None = None,
+    ) -> tuple[list[dict], str, dict]:
+        """Full retrieval pipeline with debug detail.
+
+        Same as retrieve() but also returns a retrieval_detail dict
+        with dense/sparse/fused lists for frontend debugging.
+
+        Returns:
+            Tuple of (contexts, rewritten_query, retrieval_detail)
+        """
         # Step 1: Query rewriting
         rewritten_query = query
         if settings.enable_query_rewriting and history:
             rewritten_query = self.query_rewriter.rewrite(query, history)
 
-        # Step 2: Hybrid retrieval
+        retrieval_detail = {"dense": [], "sparse": [], "fused": []}
+
+        # Step 2: Hybrid retrieval (with detail)
         if settings.enable_hybrid_retrieval:
-            results = self.hybrid_retriever.retrieve(
+            results, detail = self.hybrid_retriever.retrieve_with_detail(
                 rewritten_query, k=settings.retriever_top_k, doc_ids=doc_ids,
             )
+            retrieval_detail = detail
         else:
             where_filter = {"document_id": {"$in": doc_ids}} if doc_ids else None
-            results = self.vector_store.similarity_search(rewritten_query, k=k, where_filter=where_filter)
+            results = self.vector_store.similarity_search(
+                rewritten_query, k=k, where_filter=where_filter,
+            )
+            retrieval_detail = {"dense": results, "sparse": [], "fused": results}
 
         # Step 3: Re-ranking
         if settings.enable_reranker and results:
@@ -66,4 +89,4 @@ class Retriever:
         elif k:
             results = results[:k]
 
-        return results, rewritten_query
+        return results, rewritten_query, retrieval_detail

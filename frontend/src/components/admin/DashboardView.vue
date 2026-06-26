@@ -136,38 +136,38 @@ onMounted(load)
 .alert-banner {
   padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;
 }
-.alert-banner.warning { background: #fff3e0; border: 1px solid #ffcc02; }
-.alert-banner.critical { background: #ffebee; border: 1px solid #ef5350; }
+.alert-banner.warning { background: var(--color-warning-light); border: 1px solid #ffcc02; }
+.alert-banner.critical { background: var(--color-danger-light); border: 1px solid #ef5350; }
 .alert-item { font-size: 14px; margin-bottom: 4px; }
 .alert-level { margin-right: 6px; }
 
 /* Cards */
 .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 8px; }
 .card {
-  padding: 16px; border: 1px solid #e0e0e0; border-radius: 8px; text-align: center;
+  padding: 16px; border: 1px solid var(--border-default); border-radius: 8px; text-align: center;
 }
-.card-value { font-size: 22px; font-weight: bold; color: #333; }
-.card-label { font-size: 12px; color: #888; margin-top: 4px; }
-.card.accent .card-value { color: #1976d2; }
-.card.success .card-value { color: #2e7d32; }
-.card.danger .card-value { color: #c62828; }
+.card-value { font-size: 22px; font-weight: bold; color: var(--text-primary); }
+.card-label { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
+.card.accent .card-value { color: var(--color-primary); }
+.card.success .card-value { color: var(--color-success); }
+.card.danger .card-value { color: var(--color-danger); }
 
 /* Trends */
 .trend-section { display: flex; flex-direction: column; gap: 24px; }
 .trend-chart { }
-.trend-chart h3 { font-size: 14px; color: #555; margin-bottom: 8px; }
+.trend-chart h3 { font-size: 14px; color: var(--text-secondary); margin-bottom: 8px; }
 .bar-chart { display: flex; gap: 2px; align-items: flex-end; height: 120px; }
 .bar-group {
   flex: 1; display: flex; flex-direction: column; align-items: center;
   height: 100%; justify-content: flex-end;
 }
 .bar {
-  width: 100%; background: #1976d2; border-radius: 3px 3px 0 0;
+  width: 100%; background: var(--color-primary); border-radius: 3px 3px 0 0;
   min-height: 4px; position: relative; transition: height 0.3s;
 }
 .bar.latency { background: #7b1fa2; }
 .bar.satisfaction { background: #2e7d32; }
-.bar.no-data { background: #e0e0e0; }
-.bar-value { position: absolute; top: -16px; font-size: 10px; color: #555; width: 100%; text-align: center; }
-.bar-label { font-size: 9px; color: #999; margin-top: 4px; white-space: nowrap; }
+.bar.no-data { background: var(--border-default); }
+.bar-value { position: absolute; top: -16px; font-size: 10px; color: var(--text-secondary); width: 100%; text-align: center; }
+.bar-label { font-size: 9px; color: var(--text-tertiary); margin-top: 4px; white-space: nowrap; }
 </style>
