@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from app.config import settings
-from app.agents.tools import build_rag_tools, build_kg_tools, build_nl2sql_tools
+from app.agents.tools import build_rag_tools, build_kg_tools, build_nl2sql_tools, build_bm25_tools
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,19 @@ KG_SYSTEM_PROMPT = """你是一个知识图谱分析助手。你可以使用 sea
 3. 如果图谱中没有找到相关信息，明确告知用户
 
 回答规则：
+- 用中文回答，语气专业友好
+- 不编造信息，不依赖训练知识
+- 简洁准确，直接回答用户问题"""
+
+BM25_SYSTEM_PROMPT = """你是一个基于 BM25 关键词检索的文档助手。你可以使用 search_bm25 工具从知识库中检索文档。
+
+工作流程：
+1. 根据用户问题调用 search_bm25 检索相关知识
+2. 基于检索到的内容用中文回答用户
+3. 如果检索结果不足以回答，明确告知用户
+
+回答规则：
+- 使用 [来源N] 标注引用的来源
 - 用中文回答，语气专业友好
 - 不编造信息，不依赖训练知识
 - 简洁准确，直接回答用户问题"""
@@ -72,6 +85,10 @@ _kg_sqlite_conn = None
 _nl2sql_agent = None
 _nl2sql_checkpointer = None
 _nl2sql_conn = None
+
+_bm25_agent = None
+_bm25_checkpointer = None
+_bm25_sqlite_conn = None
 
 
 def _get_db_path() -> str:
@@ -135,6 +152,15 @@ async def init_nl2sql_agent():
     return _nl2sql_agent
 
 
+async def init_bm25_agent(bm25_retriever, vector_store):
+    """初始化 BM25 agent（只含 search_bm25）。"""
+    global _bm25_agent, _bm25_checkpointer, _bm25_sqlite_conn
+    tools = build_bm25_tools(bm25_retriever, vector_store)
+    _bm25_agent, _bm25_checkpointer, _bm25_sqlite_conn = await _create_agent(tools, BM25_SYSTEM_PROMPT)
+    logger.info("✅ BM25 agent initialized (tools=%d)", len(tools))
+    return _bm25_agent
+
+
 def get_rag_agent():
     return _rag_agent
 
@@ -147,8 +173,12 @@ def get_nl2sql_agent():
     return _nl2sql_agent
 
 
+def get_bm25_agent():
+    return _bm25_agent
+
+
 async def close_agents():
-    for conn_name in ['_rag_sqlite_conn', '_kg_sqlite_conn', '_nl2sql_conn']:
+    for conn_name in ['_rag_sqlite_conn', '_kg_sqlite_conn', '_nl2sql_conn', '_bm25_sqlite_conn']:
         conn = globals().get(conn_name)
         if conn:
             await conn.close()

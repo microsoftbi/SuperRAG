@@ -51,6 +51,45 @@ export function uploadDocument(file, title, category, knowledgeBaseIds = [], sto
   return api.post('/documents/upload', form)
 }
 
+export function previewDocument(file, title, category, knowledgeBaseIds = [], store = 'vector') {
+  const form = new FormData()
+  form.append('file', file)
+  if (title) form.append('title', title)
+  if (category) form.append('category', category)
+  form.append('store', store)
+  form.append('knowledge_base_ids', JSON.stringify(knowledgeBaseIds))
+  return api.post('/documents/preview', form)
+}
+
+export function commitChunks(docId, chunkSize, chunkOverlap, title) {
+  return api.post('/documents/commit-chunks', {
+    doc_id: docId,
+    chunk_size: chunkSize,
+    chunk_overlap: chunkOverlap,
+    title: title || undefined,
+  })
+}
+
+export function previewChunks(docId, chunkSize, chunkOverlap) {
+  return api.post('/documents/preview-chunks', {
+    doc_id: docId,
+    chunk_size: chunkSize,
+    chunk_overlap: chunkOverlap,
+  })
+}
+
+export function createLlmChunks(docId) {
+  return api.post(`/documents/${docId}/chunks/llm-preview`)
+}
+
+export function commitLlmChunks(docId) {
+  return api.post(`/documents/${docId}/chunks/llm-commit`)
+}
+
+export function rebuildBm25() {
+  return api.post('/documents/bm25/rebuild', null, { timeout: 300000 })
+}
+
 export function listDocuments(params) {
   return api.get('/documents', { params })
 }

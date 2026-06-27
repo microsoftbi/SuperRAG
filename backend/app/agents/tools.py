@@ -334,6 +334,38 @@ def build_rag_tools(rag_retriever):
     return [search_knowledge_base]
 
 
+def build_bm25_tools(bm25_retriever, vector_store):
+    """构建 BM25 deepagent tools（只含 search_bm25）。"""
+    logger.info("build_bm25_tools: bm25=%s", bm25_retriever)
+
+    @tool
+    def search_bm25(query: str) -> str:
+        """使用 BM25 关键词检索从知识库中搜索文档片段。
+
+        适用于精确关键词匹配场景，如搜索特定术语、编号、名称等。
+        """
+        logger.info("search_bm25 called: query=%s", query[:60])
+        try:
+            query_sparse = bm25_retriever.encode_query(query)
+            if not bm25_retriever.initialized:
+                return "BM25 索引未初始化，请在管理后台点击「BM25 重构」后重试。"
+            results = vector_store.sparse_search(query_sparse, k=10)
+            if not results:
+                return "BM25 检索未找到相关内容。"
+            global _current_sources
+            _current_sources = _current_sources + [
+                {"chunk_id": r["id"], "document_title": r.get("document_title", ""),
+                 "content": r.get("content", "")[:200], "score": round(r.get("score", 0), 4),
+                 "type": "bm25"}
+                for r in results[:5]
+            ]
+            return "\n\n".join(f"[来源{i+1}] {r.get('content', '')}" for i, r in enumerate(results[:5]))
+        except Exception as e:
+            logger.error("BM25 search failed: %s", e, exc_info=True)
+            return f"BM25 检索失败: {e}"
+    return [search_bm25]
+
+
 def build_kg_tools(graph_retriever):
     """构建 KG deepagent tools（只含 search_knowledge_graph）。"""
     logger.info("build_kg_tools: kg=%s", graph_retriever)

@@ -77,6 +77,7 @@ async def lifespan(app: FastAPI):
         print(f"⚠️  NL2SQL agent initialization failed: {e}")
 
     # ★ BM25 索引初始化（从已有数据重建）
+    bm25_retriever_for_agent = None
     try:
         from app.rag.bm25_retriever import BM25Retriever
         bm25 = BM25Retriever()
@@ -85,8 +86,18 @@ async def lifespan(app: FastAPI):
             print(f"✅ BM25 index rebuilt ({bm25.get_dim()} terms)")
         else:
             print("ℹ️  BM25 index not built (no documents yet)")
+        bm25_retriever_for_agent = bm25
     except Exception as e:
         print(f"⚠️  BM25 initialization: {e}")
+
+    # ★ BM25 Agent 初始化
+    if bm25_retriever_for_agent:
+        try:
+            from app.agents.agent_factory import init_bm25_agent
+            await init_bm25_agent(bm25_retriever_for_agent, documents.vector_store)
+            print("✅ BM25 agent initialized")
+        except Exception as e:
+            print(f"⚠️  BM25 agent initialization failed: {e}")
 
     yield
 

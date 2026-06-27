@@ -57,6 +57,21 @@ if not os.environ.get("MILVUS_LITE_URI"):
 if not os.environ.get("UPLOAD_DIR"):
     settings.upload_dir = str(BACKEND_DIR / "uploads")
 
+# 确保 .env 从正确的路径加载
+_env_path = BACKEND_DIR / ".env"
+if _env_path.exists():
+    for line in _env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip("'\"")
+        if not os.environ.get(key):
+            os.environ[key] = val
+    # 用环境变量覆盖重新创建 settings
+    settings = Settings()
+
 
 def ensure_dirs() -> None:
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)

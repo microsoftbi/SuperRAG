@@ -17,6 +17,7 @@
         @click="chatMode = 'kg'"
       >知识图谱</button>
       <button :class="['mode-tab', { active: chatMode === 'nl2sql' }]" @click="chatMode = 'nl2sql'">问数</button>
+      <button :class="['mode-tab', { active: chatMode === 'bm25' }]" @click="chatMode = 'bm25'">BM25检索</button>
     </nav>
     <div class="chat-body">
       <SessionSidebar
@@ -31,6 +32,7 @@
       />
       <ChatWindow v-if="chatMode === 'rag'" mode="rag" :session-key="currentSessionId" />
       <ChatWindow v-if="chatMode === 'kg'" mode="kg" :session-key="currentSessionId" />
+      <ChatWindow v-if="chatMode === 'bm25'" mode="bm25" :session-key="currentSessionId" />
       <Nl2SqlChat v-if="chatMode === 'nl2sql'" :session-key="currentSessionId" />
     </div>
   </div>
@@ -68,8 +70,8 @@ const currentSessionId = ref('')
 const sidebarCollapsed = ref(localStorage.getItem('sidebar_collapsed') === 'true')
 const kgAvailable = ref(true)  // 由后端返回，Neo4j 不可用时置 false
 
-const sessionIdKeys = { rag: 'chat_session_id', kg: 'kg_session_id', nl2sql: 'nl2sql_session_id' }
-const sessionIdPrefixes = { rag: 'session_', kg: 'kg_', nl2sql: 'nl2sql_' }
+const sessionIdKeys = { rag: 'chat_session_id', kg: 'kg_session_id', nl2sql: 'nl2sql_session_id', bm25: 'bm25_session_id' }
+const sessionIdPrefixes = { rag: 'session_', kg: 'kg_', nl2sql: 'nl2sql_', bm25: 'bm25_' }
 
 // 初始化 sessionId
 function initSessionId() {

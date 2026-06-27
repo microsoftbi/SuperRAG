@@ -31,6 +31,11 @@
             :class="['doc-tab', { active: docFilter === 'graph' }]"
             @click="docFilter = 'graph'; loadDocuments()"
           >图谱存储</button>
+          <button
+            class="btn-bm25"
+            :disabled="bm25Rebuilding"
+            @click="handleRebuildBm25"
+          >{{ bm25Rebuilding ? '重构中...' : '🔄 BM25 重构' }}</button>
         </div>
         <table>
           <thead>
@@ -99,7 +104,7 @@ import UserManager from '../components/admin/UserManager.vue'
 import KnowledgeGraphViewer from '../components/admin/KnowledgeGraphViewer.vue'
 import DocumentChunkViewer from '../components/admin/DocumentChunkViewer.vue'
 import Nl2SqlPanel from '../components/admin/Nl2SqlPanel.vue'
-import { listDocuments, deleteDocument, reprocessDocument, listKnowledgeBases } from '../api/index.js'
+import { listDocuments, deleteDocument, reprocessDocument, listKnowledgeBases, rebuildBm25 } from '../api/index.js'
 import { getRuntimeConfig } from '../api/index.js'
 import { useRouter } from 'vue-router'
 import { useTheme } from '../composables/useTheme.js'
@@ -140,6 +145,7 @@ const tabs = [
 const documents = ref([])
 const kbMap = ref({})
 const chunkViewerDoc = ref(null)
+const bm25Rebuilding = ref(false)
 const statusMap = { pending: '待处理', processing: '处理中', ready: '就绪', failed: '失败' }
 
 const storeLabels = { vector: '向量', graph: '图谱', both: '全部' }
@@ -176,6 +182,18 @@ async function retry(id) {
     await loadDocuments()
   } catch (e) {
     alert('重试失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+async function handleRebuildBm25() {
+  bm25Rebuilding.value = true
+  try {
+    const res = await rebuildBm25()
+    alert('BM25 索引重构完成：' + (res.data?.message || 'ok'))
+  } catch (e) {
+    alert('BM25 重构失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    bm25Rebuilding.value = false
   }
 }
 
@@ -232,6 +250,7 @@ th { background: var(--table-header-bg); font-weight: 600; }
   gap: 2px;
   margin-bottom: 12px;
   border-bottom: 1px solid var(--border-default);
+  align-items: center;
 }
 .doc-tab {
   padding: 6px 18px;
@@ -248,6 +267,18 @@ th { background: var(--table-header-bg); font-weight: 600; }
   border-bottom-color: var(--color-primary);
   font-weight: 600;
 }
+.btn-bm25 {
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  background: var(--bg-card);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.btn-bm25:hover:not(:disabled) { background: var(--bg-hover); }
+.btn-bm25:disabled { opacity: 0.5; cursor: not-allowed; }
 .store-badge {
   display: inline-block;
   padding: 2px 6px;

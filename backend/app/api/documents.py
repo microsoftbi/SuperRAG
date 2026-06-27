@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -266,6 +267,302 @@ def get_document_chunks(
             logger.warning("SQLite chunk query failed for doc %d: %s", document_id, e)
 
     return {"document_id": document_id, "chunks": chunks}
+
+
+# ── LLM 智能分块（调用大模型分块，不入库，仅预览）──
+
+@router.post("/{document_id}/chunks/llm-preview")
+def preview_llm_chunks(
+    document_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Use LLM to chunk a document and return preview (no save)."""
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    raw_text = doc_processor.extract_text(document.file_path)
+    if not raw_text.strip():
+        raise HTTPException(status_code=400, detail="提取的文本为空")
+
+    # Use LLM to chunk (preview only, no save)
+    chunks = llm_service.llm_chunk(raw_text)
+
+    return {
+        "chunks": chunks,
+        "count": len(chunks),
+    }
+
+
+# ── LLM 智能分块（调用大模型分块并入库）──
+
+@router.post("/{document_id}/chunks/llm-commit")
+def commit_llm_chunks(
+    document_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Use LLM to chunk a document and store in Milvus."""
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    raw_text = doc_processor.extract_text(document.file_path)
+    if not raw_text.strip():
+        raise HTTPException(status_code=400, detail="提取的文本为空")
+
+    # Use LLM to chunk
+    chunks = llm_service.llm_chunk(raw_text)
+
+    chunk_ids = []
+    texts = []
+    metadatas = []
+    for i, chunk_text in enumerate(chunks):
+        chunk_id = str(uuid.uuid4())
+        chunk_ids.append(chunk_id)
+        texts.append(chunk_text)
+        metadatas.append({
+            "document_id": document.id,
+            "document_title": document.title,
+            "chunk_index": i,
+            "doc_type": document.doc_type,
+            "category": document.category,
+        })
+
+    document.status = DocumentStatus.PROCESSING.value
+    db.commit()
+
+    try:
+        vector_store.add_texts(chunk_ids, texts, metadatas)
+    except Exception as ve:
+        document.status = DocumentStatus.FAILED.value
+        db.commit()
+        logger.error("LLM chunk add_texts failed: %s", ve, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"向量入库失败: {ve}")
+
+    document.status = DocumentStatus.READY.value
+    db.commit()
+
+    if bm25_retriever:
+        bm25_retriever.rebuild_async(vector_store=vector_store)
+
+    return {
+        "message": "ok",
+        "doc_id": document.id,
+        "chunks_count": len(chunks),
+    }
+
+
+# ── 分块预览（调后端切分，不入库）──
+
+@router.post("/preview-chunks")
+def preview_chunks(data: dict):
+    """按指定参数切分文本（不保存到 Milvus），用于前端预览。"""
+    doc_id = data.get("doc_id")
+    chunk_size = data.get("chunk_size", settings.chunk_size)
+    chunk_overlap = data.get("chunk_overlap", settings.chunk_overlap)
+    if not doc_id:
+        raise HTTPException(status_code=400, detail="doc_id is required")
+
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        document = db.query(Document).filter(Document.id == doc_id).first()
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        raw_text = doc_processor.extract_text(document.file_path)
+        if not raw_text.strip():
+            return {"chunks": [], "count": 0}
+    finally:
+        db.close()
+
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        separators=["\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", ""],
+    )
+    chunks = splitter.split_text(raw_text)
+    return {"chunks": chunks, "count": len(chunks)}
+
+
+# ── 两步上传：第一步（预上传 + 提取文本，不切分）──
+
+class PreviewResponse(BaseModel):
+    doc_id: int
+    file_name: str
+    title: str
+    text: str
+    char_count: int
+
+
+@router.post("/preview", response_model=PreviewResponse)
+def preview_document(
+    file: UploadFile = File(...),
+    title: str = Form(""),
+    category: str = Form("default"),
+    store: str = Form("vector"),
+    knowledge_base_ids: str = Form("[]"),
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """上传文件 → 保存文件 → 提取文本 → 暂不切分入库。返回全文。"""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+    if store not in VALID_STORES:
+        raise HTTPException(status_code=400, detail=f"Invalid store value: {store}")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+    doc_title = title or Path(file.filename).stem
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    save_path = Path(settings.upload_dir) / unique_name
+    with open(save_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    file.file.close()
+
+    kb_ids = json.loads(knowledge_base_ids)
+
+    # 创建文档记录（PENDING 状态，暂不处理）
+    document = Document(
+        title=doc_title,
+        doc_type=ext.lstrip("."),
+        category=category,
+        file_path=str(save_path),
+        store=store,
+        status=DocumentStatus.PENDING.value,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    for kb_id in kb_ids:
+        db.execute(
+            document_knowledge_base.insert().values(
+                document_id=document.id, knowledge_base_id=kb_id
+            )
+        )
+    db.commit()
+
+    # 提取文本
+    try:
+        raw_text = doc_processor.extract_text(str(save_path))
+    except Exception as e:
+        document.status = DocumentStatus.FAILED.value
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"文本提取失败: {e}")
+
+    return PreviewResponse(
+        doc_id=document.id,
+        file_name=file.filename,
+        title=doc_title,
+        text=raw_text,
+        char_count=len(raw_text),
+    )
+
+
+# ── 两步上传：第二步（按指定参数切分并入库）──
+
+@router.post("/commit-chunks")
+def commit_chunks(
+    data: dict,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """按指定分块参数切分文本并存入 Milvus。"""
+    doc_id = data.get("doc_id")
+    if not doc_id:
+        raise HTTPException(status_code=400, detail="doc_id is required")
+
+    document = db.query(Document).filter(Document.id == doc_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    chunk_size = data.get("chunk_size", settings.chunk_size)
+    chunk_overlap = data.get("chunk_overlap", settings.chunk_overlap)
+    custom_title = data.get("title", "")
+
+    if custom_title:
+        document.title = custom_title
+
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        separators=["\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", ""],
+    )
+
+    try:
+        raw_text = doc_processor.extract_text(document.file_path)
+        if not raw_text.strip():
+            raise HTTPException(status_code=400, detail="提取的文本为空")
+
+        chunks = text_splitter.split_text(raw_text)
+        chunk_ids = []
+        texts = []
+        metadatas = []
+        for i, chunk_text in enumerate(chunks):
+            chunk_id = str(uuid.uuid4())
+            chunk_ids.append(chunk_id)
+            texts.append(chunk_text)
+            metadatas.append({
+                "document_id": document.id,
+                "document_title": document.title,
+                "chunk_index": i,
+                "doc_type": document.doc_type,
+                "category": document.category,
+            })
+
+        document.status = DocumentStatus.PROCESSING.value
+        db.commit()
+
+        # 向量入库（含 embedding）
+        try:
+            vector_store.add_texts(chunk_ids, texts, metadatas)
+        except Exception as ve:
+            document.status = DocumentStatus.FAILED.value
+            db.commit()
+            logger.error("add_texts failed: %s", ve, exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"向量入库失败: {ve}",
+            )
+
+        document.status = DocumentStatus.READY.value
+        db.commit()
+
+        if bm25_retriever:
+            bm25_retriever.rebuild_async(vector_store=vector_store)
+
+        return {
+            "message": "ok",
+            "doc_id": document.id,
+            "chunks_count": len(chunks),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        document.status = DocumentStatus.FAILED.value
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/bm25/rebuild")
+def rebuild_bm25(
+    user: User = Depends(require_admin),
+):
+    """Rebuild BM25 index synchronously."""
+    from app.rag.bm25_retriever import BM25Retriever
+    bm25 = BM25Retriever()
+    bm25.rebuild_index(vector_store=vector_store)
+    if bm25.initialized:
+        return {"message": "BM25 index rebuilt", "terms": bm25.get_dim()}
+    else:
+        return {"message": "No documents to build BM25 index"}
 
 
 @router.post("/{document_id}/reprocess")

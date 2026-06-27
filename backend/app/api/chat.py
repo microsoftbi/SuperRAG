@@ -26,7 +26,7 @@ from app.services.nl2sql_config import load_nl2sql_config
 from app.rag.retriever import Retriever
 from app.rag.query_rewriter import QueryRewriter
 from app.kg.graph_retriever import GraphRetriever
-from app.agents.agent_factory import get_rag_agent, get_kg_agent, get_nl2sql_agent
+from app.agents.agent_factory import get_rag_agent, get_kg_agent, get_nl2sql_agent, get_bm25_agent
 from app.agents.tools import reset_tool_state, get_collected_sources, get_retrieval_detail, cache_retrieval_detail, _build_minigraph
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -88,6 +88,16 @@ async def chat(
         reset_tool_state(thread_id)
         config = {"configurable": {"thread_id": thread_id}}
         route = "NL2SQL"
+
+    # ── BM25 模式 ──
+    elif request.mode == "bm25":
+        agent = get_bm25_agent()
+        if agent is None:
+            return _error_response("BM25 Agent not initialized")
+        thread_id = f"bm25_u{user.id}_{request.session_id}"
+        reset_tool_state(thread_id)
+        config = {"configurable": {"thread_id": thread_id}}
+        route = "BM25"
     else:
         return _error_response(f"Unknown mode: {request.mode}")
 
@@ -312,6 +322,7 @@ async def get_chat_history(
 
     mode=rag     → 从 RAG agent checkpoints 读取
     mode=nl2sql  → 从 NL2SQL agent checkpoints 读取
+    mode=bm25    → 从 BM25 agent checkpoints 读取
     """
     if mode == "nl2sql":
         agent = get_nl2sql_agent()
@@ -319,6 +330,9 @@ async def get_chat_history(
     elif mode == "kg":
         agent = get_kg_agent()
         thread_id = f"kg_u{user.id}_{session_id}"
+    elif mode == "bm25":
+        agent = get_bm25_agent()
+        thread_id = f"bm25_u{user.id}_{session_id}"
     else:
         agent = get_rag_agent()
         thread_id = f"rag_u{user.id}_{session_id}"
@@ -379,10 +393,11 @@ async def list_sessions(
     mode=rag   → 查询 RAG 会话（route=AGENT）
     mode=kg    → 查询 KG 会话（route=KG）
     mode=nl2sql → 查询 NL2SQL 会话（route=NL2SQL）
+    mode=bm25  → 查询 BM25 会话（route=BM25）
     """
     # 从 conversation_logs 查询当前用户的会话聚合信息
     # 根据 mode 过滤 route
-    route_map = {"rag": "AGENT", "kg": "KG", "nl2sql": "NL2SQL"}
+    route_map = {"rag": "AGENT", "kg": "KG", "nl2sql": "NL2SQL", "bm25": "BM25"}
     route_filter = route_map.get(mode, "AGENT")
     # 子查询：取每个 session 中 id 最小的记录即为第一条 query
     first_log_subq = (
@@ -455,13 +470,16 @@ async def delete_session(
     db.commit()
 
     # 删除 checkpoints（thread）
-    from app.agents.agent_factory import get_rag_agent, get_kg_agent, get_nl2sql_agent
+    from app.agents.agent_factory import get_rag_agent, get_kg_agent, get_nl2sql_agent, get_bm25_agent
     if mode == "nl2sql":
         agent = get_nl2sql_agent()
         thread_id = f"nl2sql_u{user.id}_{session_id}"
     elif mode == "kg":
         agent = get_kg_agent()
         thread_id = f"kg_u{user.id}_{session_id}"
+    elif mode == "bm25":
+        agent = get_bm25_agent()
+        thread_id = f"bm25_u{user.id}_{session_id}"
     else:
         agent = get_rag_agent()
         thread_id = f"rag_u{user.id}_{session_id}"
